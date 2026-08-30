@@ -18,6 +18,7 @@ import {
 } from "../../core/lib/cover-extractor";
 import { extractFilenameFromPath, ensureFilenameForFormat } from "../../core/lib/import";
 import { isTauri, useAndroidBackButton } from "../../core/lib/env";
+import { sqliteShrinkMemory } from "../../core/lib/sqlite-storage";
 import {
     useVocabularyStore,
     useLibraryStore,
@@ -261,6 +262,7 @@ const BookReaderPage = memo(function BookReaderPage() {
         totalPages: number;
         zoom: number;
         zoomMode: PdfZoomMode;
+        presentationMode: 'scroll' | 'paged';
     } | null>(null);
     const progressSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingProgressUpdateRef = useRef<PendingProgressUpdate | null>(null);
@@ -351,6 +353,17 @@ const BookReaderPage = memo(function BookReaderPage() {
         mediaQuery.addEventListener('change', handleChange);
         return () => {
             mediaQuery.removeEventListener('change', handleChange);
+        };
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            setFile(null);
+            setPdfData(null);
+            setResolvedPdfPath("");
+            setMetadata(null);
+            setToc([]);
+            void sqliteShrinkMemory();
         };
     }, []);
 
@@ -671,7 +684,9 @@ const BookReaderPage = memo(function BookReaderPage() {
                     ),
                 );
                 const nextInitialZoomMode = savedPdfState?.zoomMode ?? DEFAULT_PDF_ZOOM_MODE;
+                const nextPresentationMode = savedPdfState?.presentationMode ?? 'scroll';
 
+                setPdfPresentationMode(nextPresentationMode);
                 setPdfInitialPage(nextInitialPage);
                 setPdfInitialZoom(nextInitialZoom);
                 setPdfInitialZoomMode(nextInitialZoomMode);
@@ -1063,6 +1078,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                 totalPages: safeTotalPages,
                 zoom: safeZoom,
                 zoomMode: pdfZoomMode,
+                presentationMode: pdfPresentationMode,
             } as const;
 
             const previousPersistedState = lastPersistedPdfStateRef.current;
@@ -1071,8 +1087,9 @@ const BookReaderPage = memo(function BookReaderPage() {
                 && previousPersistedState.bookId === nextPersistedState.bookId
                 && previousPersistedState.page === nextPersistedState.page
                 && previousPersistedState.totalPages === nextPersistedState.totalPages
-                && previousPersistedState.zoom === nextPersistedState.zoom
+                && Math.abs(previousPersistedState.zoom - nextPersistedState.zoom) < 0.0001
                 && previousPersistedState.zoomMode === nextPersistedState.zoomMode
+                && previousPersistedState.presentationMode === nextPersistedState.presentationMode
             ) {
                 return;
             }
@@ -1084,6 +1101,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                 totalPages: safeTotalPages,
                 zoom: safeZoom,
                 zoomMode: pdfZoomMode,
+                presentationMode: pdfPresentationMode,
             });
 
             handleBookCompletionProgress(currentBookId, safeCurrentPage / safeTotalPages);
@@ -1100,6 +1118,7 @@ const BookReaderPage = memo(function BookReaderPage() {
         handleBookCompletionProgress,
         isPdfFormat,
         pdfCurrentPage,
+        pdfPresentationMode,
         pdfTotalPages,
         pdfZoom,
         pdfZoomMode,
@@ -1348,8 +1367,11 @@ const BookReaderPage = memo(function BookReaderPage() {
     }, []);
 
     const handlePdfPresentationModeChange = useCallback((mode: 'scroll' | 'paged') => {
+        setPdfPresentationMode((prev) => {
+            if (prev === mode) return prev;
+            return mode;
+        });
         pdfReaderRef.current?.setPresentationMode(mode);
-        setPdfPresentationMode(mode);
     }, []);
 
     const handlePdfZoomIn = useCallback(() => {
@@ -2230,13 +2252,13 @@ const BookReaderPage = memo(function BookReaderPage() {
         <div
             className={cn(
                 "fixed inset-0 overflow-clip",
-                `theme-${settings.readerSettings.theme}`
+                !isPdfFormat && `theme-${settings.readerSettings.theme}`
             )}
             style={{
-                backgroundColor: 'var(--reader-bg)',
+                backgroundColor: isPdfFormat ? 'var(--color-surface)' : 'var(--reader-bg)',
                 overscrollBehavior: 'none',
             }}
-            data-reading-mode={settings.readerSettings.flow}
+            data-reading-mode={isPdfFormat ? undefined : settings.readerSettings.flow}
         >
             
             <div
@@ -2254,8 +2276,8 @@ const BookReaderPage = memo(function BookReaderPage() {
                     canGoForward={canGoForwardState}
                     onGoBack={() => readerRef.current?.goBack()}
                     onGoForward={() => readerRef.current?.goForward()}
-                    onPrevPage={() => readerRef.current?.prev()}
-                    onNextPage={() => readerRef.current?.next()}
+                    onPrevPage={() => isPdfFormat ? pdfReaderRef.current?.prevPage() : readerRef.current?.prev()}
+                    onNextPage={() => isPdfFormat ? pdfReaderRef.current?.nextPage() : readerRef.current?.next()}
                     onToggleToc={() => togglePanel('toc')}
                     onToggleSettings={() => togglePanel('settings')}
                     onToggleBookmarks={() => togglePanel('bookmarks')}
@@ -2268,9 +2290,9 @@ const BookReaderPage = memo(function BookReaderPage() {
                     fullscreen={settings.readerSettings.fullscreen}
                     onToggleFullscreen={() => updateReaderSettings({ fullscreen: !settings.readerSettings.fullscreen })}
                     immersionMode={immersionMode}
-                    onToggleImmersion={ttsEnabled ? () => setImmersionMode(v => !v) : undefined}
+                    onToggleImmersion={(!isPdfFormat && ttsEnabled) ? () => setImmersionMode(v => !v) : undefined}
                     speedReadMode={speedReadMode}
-                    onToggleSpeedRead={settings.speedReadEnabled ? () => {
+                    onToggleSpeedRead={(!isPdfFormat && settings.speedReadEnabled) ? () => {
                         if (speedReadMode) {
                             setSpeedReadMode(false);
                             setSpeedReadText("");
@@ -2301,13 +2323,13 @@ const BookReaderPage = memo(function BookReaderPage() {
                             initialZoomMode={pdfInitialZoomMode}
                             presentationMode={pdfPresentationMode}
                             onPresentationModeChange={handlePdfPresentationModeChange}
-                            theme={settings.readerSettings.theme}
                             brightness={settings.readerSettings.brightness}
                             onPageChange={handlePdfPageChange}
                             onZoomModeChange={handlePdfZoomModeChange}
                             onLoad={handlePdfLoad}
                             onError={handlePdfError}
                             onViewportTap={handleViewportTap}
+                            showControls={shouldShowReaderChrome}
                             annotations={annotations}
                             annotationMode={pdfAnnotationMode}
                             highlightColor={pdfHighlightColor}
@@ -2348,14 +2370,14 @@ const BookReaderPage = memo(function BookReaderPage() {
                         className={cn(
                             "fixed bottom-6 z-[100]",
                             isMobileViewport ? "left-4" : "left-8",
-                            "flex items-center justify-center w-12 h-12 shadow-xl transition-colors duration-300",
-                            "bg-[var(--color-surface)]/90 backdrop-blur-xl text-[var(--color-text-primary)] border border-[var(--color-border)]",
+                            "flex items-center justify-center w-11 h-11 rounded-full shadow-lg transition-all duration-300",
+                            "bg-[var(--color-surface)]/95 backdrop-blur-xl text-[color:var(--color-text-primary)] border border-[var(--color-border)]",
                             "hover:scale-105 active:scale-95 hover:bg-[var(--color-surface)]",
                             (shouldShowReaderChrome || pdfAnnotationMode !== 'none') ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
                         )}
                         aria-label="Table of Contents"
                     >
-                        <List className="w-5 h-5" />
+                        <List className="w-5 h-5 text-[color:var(--color-text-primary)]" />
                     </button>
                     <PDFFloatingToolbar
                         annotationMode={pdfAnnotationMode}
@@ -2367,7 +2389,7 @@ const BookReaderPage = memo(function BookReaderPage() {
                         onPenColorChange={setPdfBrushColor}
                         onPenWidthChange={setPdfBrushWidth}
                         className={cn(
-                            "bottom-6 transition-colors duration-300",
+                            "bottom-6 transition-all duration-300",
                             isMobileViewport ? "right-4" : "right-8",
                             (shouldShowReaderChrome || pdfAnnotationMode !== 'none') ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
                         )}
@@ -2448,12 +2470,14 @@ const BookReaderPage = memo(function BookReaderPage() {
                     onClose={() => setActivePanel(null)}
                     zoom={pdfZoom}
                     zoomMode={pdfZoomMode}
+                    presentationMode={pdfPresentationMode}
                     onZoomIn={handlePdfZoomIn}
                     onZoomOut={handlePdfZoomOut}
                     onZoomReset={handlePdfZoomReset}
                     onFitPage={handlePdfZoomFitPage}
                     onFitWidth={handlePdfZoomFitWidth}
                     onRotate={() => pdfReaderRef.current?.rotateClockwise()}
+                    onPresentationModeChange={handlePdfPresentationModeChange}
                 />
             ) : (
                 <ReaderSettings

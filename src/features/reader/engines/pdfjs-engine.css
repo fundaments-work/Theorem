@@ -136,14 +136,8 @@
 }
 
 
-.theme-dark .pdf-page-wrapper {
-    background: var(--color-surface);
-    border-color: var(--color-border);
-    box-shadow: none;
-}
-
-.theme-sepia .pdf-page-wrapper {
-    background: var(--color-surface);
+.pdf-page-wrapper {
+    background: #ffffff;
     border-color: var(--color-border);
 }
 
