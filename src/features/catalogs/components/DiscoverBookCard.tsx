@@ -76,8 +76,8 @@ export function DiscoverBookCard({
                     className={cn(
                         "absolute bottom-2 right-2 z-20 flex items-center justify-center rounded-sm transition-all duration-200 shadow-md",
                         isBookInLibrary
-                            ? "h-6 px-2 bg-zinc-900 text-zinc-100 text-[9px] font-bold border border-zinc-700 hover:bg-black"
-                            : "h-6 px-2 bg-white text-black text-[9px] font-bold hover:bg-neutral-200 active:scale-95"
+                            ? "h-6 px-2 bg-[var(--color-surface)] text-[color:var(--color-text-primary)] text-[9px] font-bold border border-[var(--color-border)] hover:bg-[var(--color-surface-muted)]"
+                            : "h-6 px-2 bg-[var(--color-surface)] text-[color:var(--color-text-primary)] text-[9px] font-bold border border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] active:scale-95"
                     )}
                     title={isBookInLibrary ? "In Library" : "Add to Library"}
                 >

@@ -128,6 +128,9 @@ function filterActualBooks(entries: OpdsEntry[]): OpdsEntry[] {
         "popular",
         "latest",
         "search",
+        "search results",
+        "no results",
+        "results",
     ]);
 
     return entries
@@ -142,14 +145,31 @@ function filterActualBooks(entries: OpdsEntry[]): OpdsEntry[] {
                 lower.includes("returned no") ||
                 lower.includes("no books found") ||
                 lower.includes("not found") ||
-                lower.startsWith("search results for")
+                lower.includes("matching your search") ||
+                lower.includes("0 results") ||
+                lower.startsWith("search results for") ||
+                lower.startsWith("search for")
             ) {
                 return false;
             }
 
+            // Reject category / shelf navigation links
             if (entry.id.includes("/subjects/") || entry.id.includes("/bookshelves/") || entry.id.includes("/authors/")) return false;
             if (entry.navUrl && (entry.navUrl.includes("/subjects/") || entry.navUrl.includes("/bookshelves/") || entry.navUrl.includes("/authors/"))) return false;
+
+            // Must have a valid title
             if (!rawTitle || rawTitle.length < 2) return false;
+
+            // Must either have a direct download URL, or a valid book identifier
+            const isGutenbergBook = entry.id.includes("/ebooks/") && /\/ebooks\/\d+/.test(entry.id);
+            const isStandardEbooks = entry.id.includes("standardebooks.org/ebooks/");
+            const hasDownload = Boolean(entry.downloadUrl);
+            const hasBookNav = Boolean(entry.navUrl && (entry.navUrl.includes("/ebooks/") || entry.navUrl.includes("/entry/")));
+
+            if (!hasDownload && !isGutenbergBook && !isStandardEbooks && !hasBookNav) {
+                return false;
+            }
+
             return true;
         })
         .map((entry) => {

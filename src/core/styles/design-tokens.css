@@ -241,32 +241,6 @@
 }
 
 .theme-dark {
-    color-scheme: dark;
-    --app-bg: #141416;
-    --app-surface: #1c1c20;
-    --app-surface-elevated: #28282c;
-    --app-surface-muted: #353539;
-    --app-surface-variant: #3d3d42;
-    --app-surface-hover: #454549;
-    --app-text-primary: #e8e6e1;
-    --app-text-secondary: #9a9a9a;
-    --app-text-muted: #7a7a7a;
-    --app-text-inverse: #141416;
-    --app-border: #3d3d42;
-    --app-border-subtle: #323236;
-    --app-accent: #6bcdd1;
-    --app-accent-hover: #7dd7db;
-    --app-accent-light: color-mix(in srgb, #6bcdd1 16%, #141416);
-    --app-accent-contrast: #141416;
-    --app-success: #4ade80;
-    --app-warning: #fbbf24;
-    --app-error: #ef5350;
-    --app-info: #9a9a9a;
-    --app-focus-ring: color-mix(in srgb, #6bcdd1 58%, transparent);
-    --app-overlay-subtle: color-mix(in srgb, #ffffff 10%, transparent);
-    --app-overlay-medium: color-mix(in srgb, #ffffff 16%, transparent);
-    --app-overlay-strong: color-mix(in srgb, #000000 60%, transparent);
-    --app-overlay-strong-hover: color-mix(in srgb, #000000 70%, transparent);
     --reader-bg-override: #000000;
     --reader-fg-override: #ffffff;
     --reader-link-override: #ffffff;

@@ -90,11 +90,15 @@ export function DiscoverPage() {
                 });
             }
         } catch (err: any) {
-            if (requestIdRef.current === currentReq && sections.length === 0) {
-                console.error("Discover load error:", err);
-                startTransition(() => {
-                    setError("Could not connect to online libraries.");
-                });
+            if (requestIdRef.current === currentReq) {
+                console.warn("Discover load error:", err);
+                if (sections.length === 0) {
+                    startTransition(() => {
+                        setError("Could not connect to online libraries.");
+                    });
+                } else if (forceRefresh) {
+                    toast.error("Could not refresh catalogs. Showing cached library.");
+                }
             }
         } finally {
             if (requestIdRef.current === currentReq) {
@@ -300,12 +304,19 @@ export function DiscoverPage() {
                         <PageLoader message={isSearching ? "Searching 75,000+ catalog titles…" : "Loading curated library…"} />
                     </div>
                 ) : error && sections.length === 0 && searchResults.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] p-8">
-                        <Globe className="h-10 w-10 text-[color:var(--color-text-muted)] stroke-1" />
-                        <p className="text-xs text-[color:var(--color-text-muted)] max-w-sm">{error}</p>
+                    <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+                        <div className="mb-4 flex h-14 w-14 items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)]">
+                            <Globe className="h-6 w-6 text-[color:var(--color-text-muted)] stroke-1" />
+                        </div>
+                        <h2 className="mb-2 text-base font-bold text-[color:var(--color-text-primary)]">
+                            Could not connect to online libraries
+                        </h2>
+                        <p className="mx-auto w-full max-w-[22rem] break-words text-sm text-[color:var(--color-text-muted)] mb-6 leading-relaxed">
+                            {error}
+                        </p>
                         <button
                             onClick={() => loadDiscoverFeed(true)}
-                            className="mt-2 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold hover:bg-[var(--color-surface-muted)] transition-colors"
+                            className="px-5 py-2.5 bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                         >
                             Try Again
                         </button>
@@ -339,11 +350,11 @@ export function DiscoverPage() {
                                         data-index={virtualRow.index}
                                         ref={searchVirtualizer.measureElement}
                                         style={{
-                                            position: "absolute",
-                                            top: 0,
-                                            left: 0,
-                                            width: "100%",
-                                            transform: `translateY(${virtualRow.start}px)`,
+                                             position: "absolute",
+                                             top: 0,
+                                             left: 0,
+                                             width: "100%",
+                                             transform: `translateY(${virtualRow.start}px)`,
                                         }}
                                         className="pb-4"
                                     >
@@ -370,12 +381,14 @@ export function DiscoverPage() {
                     </div>
                 ) : searchQuery.trim().length >= 2 && searchResults.length === 0 ? (
                     /* Search with No Results */
-                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] p-8 animate-fade-in">
-                        <Search className="h-10 w-10 text-[color:var(--color-text-muted)] stroke-1" />
-                        <h2 className="text-sm font-bold text-[color:var(--color-text-primary)]">
+                    <div className="mx-auto w-full max-w-[26rem] min-w-0 px-4 sm:px-6 flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+                        <div className="mb-4 flex h-14 w-14 items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface)]">
+                            <Search className="h-6 w-6 text-[color:var(--color-text-muted)] stroke-1" />
+                        </div>
+                        <h2 className="mb-2 text-base font-bold text-[color:var(--color-text-primary)]">
                             No books found for &ldquo;{searchQuery}&rdquo;
                         </h2>
-                        <p className="text-xs text-[color:var(--color-text-muted)] max-w-sm">
+                        <p className="mx-auto w-full max-w-[22rem] break-words text-sm text-[color:var(--color-text-muted)] mb-6 leading-relaxed">
                             We couldn't find any public domain titles matching your search. Try searching by author, title, or topic.
                         </p>
                         <button
@@ -383,7 +396,7 @@ export function DiscoverPage() {
                                 setSearchQuery("");
                                 startTransition(() => setSearchResults([]));
                             }}
-                            className="mt-2 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                            className="px-5 py-2.5 bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
                         >
                             Clear Search
                         </button>
