@@ -1,4 +1,4 @@
-import { Maximize2, RotateCw, SlidersHorizontal, X, ZoomIn, ZoomOut } from "lucide-react";
+import { FileText, Maximize2, RotateCw, Scroll, SlidersHorizontal, X, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "../../../core/lib/utils";
 import type { PdfZoomMode } from "../../../core/types";
 import { Backdrop, FloatingPanel } from "../../../ui";
@@ -7,6 +7,7 @@ interface PDFViewSettingsPanelProps {
     visible: boolean;
     zoom: number;
     zoomMode: PdfZoomMode;
+    presentationMode?: 'scroll' | 'paged';
     onClose: () => void;
     onZoomIn: () => void;
     onZoomOut: () => void;
@@ -14,6 +15,7 @@ interface PDFViewSettingsPanelProps {
     onFitPage?: () => void;
     onFitWidth?: () => void;
     onRotate: () => void;
+    onPresentationModeChange?: (mode: 'scroll' | 'paged') => void;
     className?: string;
 }
 
@@ -31,6 +33,7 @@ export function PDFViewSettingsPanel({
     visible,
     zoom,
     zoomMode,
+    presentationMode = "scroll",
     onClose,
     onZoomIn,
     onZoomOut,
@@ -38,6 +41,7 @@ export function PDFViewSettingsPanel({
     onFitPage,
     onFitWidth,
     onRotate,
+    onPresentationModeChange,
     className,
 }: PDFViewSettingsPanelProps) {
     const zoomLabel = formatZoomModeLabel(zoomMode, zoom);
@@ -65,6 +69,34 @@ export function PDFViewSettingsPanel({
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-5 [content-visibility:auto] overscroll-contain">
+                    {/* Layout / Presentation Mode */}
+                    <section className="space-y-3">
+                        <p className="text-xs font-medium text-[color:var(--color-text-muted)]">Layout</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => onPresentationModeChange?.("scroll")}
+                                className="ui-chip-btn"
+                                data-active={presentationMode === "scroll"}
+                            >
+                                <span className="inline-flex items-center justify-center gap-1.5">
+                                    <Scroll className="w-4 h-4" />
+                                    <span>Continuous</span>
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => onPresentationModeChange?.("paged")}
+                                className="ui-chip-btn"
+                                data-active={presentationMode === "paged"}
+                            >
+                                <span className="inline-flex items-center justify-center gap-1.5">
+                                    <FileText className="w-4 h-4" />
+                                    <span>Single Page</span>
+                                </span>
+                            </button>
+                        </div>
+                    </section>
+
+                    {/* Zoom Controls */}
                     <section className="space-y-3">
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-medium text-[color:var(--color-text-muted)]">Zoom</p>
@@ -84,7 +116,7 @@ export function PDFViewSettingsPanel({
                             <button
                                 onClick={onZoomReset}
                                 className="ui-chip-btn"
-                                title="Reset zoom"
+                                title="Reset zoom to 100%"
                             >
                                 {zoomLabel}
                             </button>
@@ -101,6 +133,7 @@ export function PDFViewSettingsPanel({
                         </div>
                     </section>
 
+                    {/* Fit Controls */}
                     <section className="space-y-3">
                         <p className="text-xs font-medium text-[color:var(--color-text-muted)]">Fit</p>
                         <div className="grid grid-cols-2 gap-2">
@@ -127,6 +160,7 @@ export function PDFViewSettingsPanel({
                         </div>
                     </section>
 
+                    {/* Page Rotation */}
                     <section className="space-y-3">
                         <p className="text-xs font-medium text-[color:var(--color-text-muted)]">Page</p>
                         <button

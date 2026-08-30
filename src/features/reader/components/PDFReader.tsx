@@ -52,6 +52,7 @@ interface PDFReaderProps {
     onAnnotationChange?: (annotation: Annotation) => void;
     onAnnotationRemove?: (id: string) => void;
     onZoomModeChange?: (mode: PdfZoomMode) => void;
+    showControls?: boolean;
 }
 
 function ErrorState({
@@ -110,7 +111,6 @@ export const PDFReader = memo(forwardRef<PDFJsEngineRef, PDFReaderProps>(
             initialZoomMode,
             presentationMode = 'scroll',
             onPresentationModeChange,
-            theme = "light",
             brightness = 100,
             onPageChange,
             onLoad,
@@ -125,6 +125,7 @@ export const PDFReader = memo(forwardRef<PDFJsEngineRef, PDFReaderProps>(
             onAnnotationChange,
             onAnnotationRemove,
             onZoomModeChange,
+            showControls = true,
         },
         ref
     ) {
@@ -224,21 +225,10 @@ export const PDFReader = memo(forwardRef<PDFJsEngineRef, PDFReaderProps>(
             [onError]
         );
 
-        const themeClass = {
-            light: "theme-light",
-            sepia: "theme-sepia",
-            dark: "theme-dark",
-        }[theme];
-
         return (
             <div
-                className={cn(
-                    "flex flex-col h-full w-full overflow-hidden",
-                    themeClass,
-                    "transition-colors duration-200"
-                )}
+                className="flex flex-col h-full w-full overflow-hidden transition-colors duration-200"
                 style={{ filter: `brightness(${brightness}%)` }}
-                data-reading-mode="pdf"
             >
                 
                 <div className="flex-1 relative overflow-hidden">
@@ -268,6 +258,7 @@ export const PDFReader = memo(forwardRef<PDFJsEngineRef, PDFReaderProps>(
                         onAnnotationAdd={onAnnotationAdd}
                         onAnnotationChange={onAnnotationChange}
                         onAnnotationRemove={onAnnotationRemove}
+                        showControls={showControls}
                         className="w-full h-full"
                     />
                 </div>

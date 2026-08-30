@@ -55,83 +55,87 @@ export function PDFFloatingToolbar({
     };
 
     return (
-        <div className={cn("fixed z-[100] flex flex-col items-end gap-4 pointer-events-none", className)}>
+        <div className={cn("fixed z-[100] flex flex-col items-end gap-3 pointer-events-none", className)}>
             
             <div
                 className={cn(
-                    "flex flex-col gap-2 transition-colors duration-300 ease-out origin-bottom-right pointer-events-auto",
+                    "flex flex-col gap-2 transition-all duration-300 ease-out origin-bottom-right pointer-events-auto",
                     isOpen ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 translate-y-8 pointer-events-none"
                 )}
             >
                 
-                <div className="flex flex-col items-center gap-2 p-2 bg-[var(--color-surface)]/90 backdrop-blur-xl border border-[var(--color-border)] shadow-2xl">
+                <div className="flex flex-col items-center gap-2 p-2 rounded-2xl bg-[var(--color-surface)]/95 backdrop-blur-xl border border-[var(--color-border)] shadow-xl">
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'highlight' ? 'none' : 'highlight')}
                             className={cn(
-                                "relative w-10 h-10 flex items-center justify-center transition-colors duration-200",
+                                "relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200",
                                 annotationMode === 'highlight'
-                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
-                                    : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-sm scale-105"
+                                    : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]"
                             )}
                             aria-label="Highlight"
+                            title="Highlight text"
                         >
-                            <Highlighter className="w-5 h-5" />
+                            <Highlighter className="w-4.5 h-4.5" />
                         </button>
 
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'pen' ? 'none' : 'pen')}
                             className={cn(
-                                "relative w-10 h-10 flex items-center justify-center transition-colors duration-200",
+                                "relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200",
                                 annotationMode === 'pen'
-                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
-                                    : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-sm scale-105"
+                                    : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]"
                             )}
                             aria-label="Pen"
+                            title="Freehand pen"
                         >
-                            <Pencil className="w-5 h-5" />
+                            <Pencil className="w-4.5 h-4.5" />
                         </button>
 
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'text' ? 'none' : 'text')}
                             className={cn(
-                                "relative w-10 h-10 flex items-center justify-center transition-colors duration-200",
+                                "relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200",
                                 annotationMode === 'text'
-                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
-                                    : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-sm scale-105"
+                                    : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]"
                             )}
                             aria-label="Text"
+                            title="Add note"
                         >
-                            <Type className="w-5 h-5" />
+                            <Type className="w-4.5 h-4.5" />
                         </button>
 
                         <button
                             onClick={() => onAnnotationModeChange(annotationMode === 'erase' ? 'none' : 'erase')}
                             className={cn(
-                                "relative w-10 h-10 flex items-center justify-center transition-colors duration-200",
+                                "relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200",
                                 annotationMode === 'erase'
-                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-lg scale-105"
-                                    : "hover:bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                                    ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] shadow-sm scale-105"
+                                    : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)]"
                             )}
                             aria-label="Eraser"
+                            title="Eraser"
                         >
-                            <Eraser className="w-5 h-5" />
+                            <Eraser className="w-4.5 h-4.5" />
                         </button>
                     </div>
 
                     {(annotationMode === 'highlight' || annotationMode === 'pen') && (
-                        <div className="w-full h-px bg-[var(--color-border)]/50 my-1" />
+                        <div className="w-full h-px bg-[var(--color-border)] my-0.5" />
                     )}
 
                     {(annotationMode === 'highlight' || annotationMode === 'pen') && (
-                        <div className="flex items-center justify-center gap-2 p-1 w-full overflow-x-auto no-scrollbar">
+                        <div className="flex items-center justify-center gap-1.5 p-1 w-full overflow-x-auto no-scrollbar">
                             {annotationColorSwatches.map((swatch) => (
                                 <button
                                     key={swatch.color}
                                     onClick={() => onHighlightColorChange(swatch.color)}
                                     className={cn(
-                                        "w-6 h-6 transition-transform ring-2 ring-transparent",
+                                        "w-5 h-5 rounded-full transition-transform ring-2 ring-transparent",
                                         highlightColor === swatch.color ? "scale-110 ring-[var(--color-border)] shadow-sm" : "hover:scale-110"
                                     )}
                                     style={{ backgroundColor: swatch.fill }}
@@ -146,17 +150,18 @@ export function PDFFloatingToolbar({
             <button
                 onClick={toggleOpen}
                 className={cn(
-                    "pointer-events-auto flex items-center justify-center w-14 h-14 shadow-xl transition-colors duration-300",
+                    "pointer-events-auto flex items-center justify-center w-11 h-11 rounded-full shadow-lg transition-all duration-300",
                     isOpen
-                        ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rotate-90"
-                        : "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] hover:scale-105 hover:shadow-2xl hover:-translate-y-0.5"
+                        ? "bg-[var(--color-surface)]/95 backdrop-blur-xl text-[color:var(--color-text-primary)] border border-[var(--color-border)] rotate-90"
+                        : "bg-[var(--color-surface)]/95 backdrop-blur-xl text-[color:var(--color-text-primary)] border border-[var(--color-border)] hover:bg-[var(--color-surface)] hover:scale-105 active:scale-95"
                 )}
                 aria-label={isOpen ? "Close tools" : "Open tools"}
+                title={isOpen ? "Close annotation tools" : "Open annotation tools"}
             >
                 {isOpen ? (
-                    <X className="w-6 h-6" />
+                    <X className="w-5 h-5 text-[color:var(--color-text-primary)]" />
                 ) : (
-                    <Edit3 className="w-6 h-6 ml-0.5" />
+                    <Edit3 className="w-5 h-5 text-[color:var(--color-text-primary)]" />
                 )}
             </button>
         </div>

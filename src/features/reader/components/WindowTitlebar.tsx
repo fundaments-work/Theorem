@@ -104,7 +104,6 @@ function MobileMenu({ isOpen, onClose, items, triggerRef: _triggerRef }: MenuPro
 
     return (
         <>
-            
             <div
                 className="fixed inset-0 z-[160]"
                 onClick={(e) => {
@@ -113,37 +112,28 @@ function MobileMenu({ isOpen, onClose, items, triggerRef: _triggerRef }: MenuPro
                 }}
             />
             <div
-                className="absolute right-2 top-full mt-1 z-[161] min-w-[12rem] max-w-[calc(100vw-1rem)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
+                className="absolute right-2 top-full mt-1.5 z-[161] min-w-[13rem] max-w-[calc(100vw-1rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur-xl shadow-xl py-1 overflow-hidden transition-all duration-200"
             >
-                <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-3 py-1.5">
-                    <span className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wider">Menu</span>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onClose(); }}
-                        className="flex h-7 w-7 items-center justify-center text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[color:color-mix(in_srgb,var(--reader-fg,var(--color-text))_8%,transparent)] rounded transition-colors"
-                        aria-label="Close menu"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
                 {items.map((item, index) => (
                     <button
                         key={index}
                         onClick={(e) => {
                             e.stopPropagation();
+                            onClose();
                             item.onClick();
                         }}
                         disabled={item.disabled}
-                    className={cn(
-                        "flex w-full items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors text-[color:var(--color-text-primary)]",
-                        item.active
-                            ? "bg-[var(--color-surface-muted)] font-medium"
-                            : "hover:bg-[var(--color-surface-muted)]",
-                        item.disabled && "opacity-50 cursor-not-allowed",
-                        item.mobileOnly && "sm:hidden"
-                    )}
+                        className={cn(
+                            "flex w-full items-center gap-3 px-3.5 py-2.5 text-xs text-left transition-colors text-[color:var(--color-text-primary)]",
+                            item.active
+                                ? "bg-[var(--color-surface-muted)] font-medium text-[color:var(--color-accent)]"
+                                : "hover:bg-[var(--color-surface-muted)]",
+                            item.disabled && "opacity-50 cursor-not-allowed",
+                            item.mobileOnly && "sm:hidden"
+                        )}
                     >
-                        <span className="w-5 h-5 flex items-center justify-center opacity-70">{item.icon}</span>
-                        {item.label}
+                        <span className="w-4 h-4 flex items-center justify-center opacity-80 shrink-0">{item.icon}</span>
+                        <span className="flex-1 truncate">{item.label}</span>
                     </button>
                 ))}
             </div>
@@ -290,8 +280,7 @@ export function WindowTitlebar({
                 <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[480px]">
                     <button
                         onClick={onBack}
-                        className={cn(ICON_BUTTON_CLASS, "mr-1 sm:mr-2 shrink-0")}
-                        style={{ color: 'var(--reader-fg, var(--color-text))' }}
+                        className={cn(ICON_BUTTON_CLASS, "mr-1 sm:mr-2 shrink-0 text-[color:var(--color-text-primary)]")}
                         aria-label="Back to Library"
                         title="Back to Library"
                     >
@@ -300,16 +289,14 @@ export function WindowTitlebar({
 
                     <div className="flex-1 min-w-0 text-left overflow-hidden pr-1 sm:pr-2">
                         <h1
-                            className="text-xs sm:text-sm font-bold truncate leading-tight"
-                            style={{ color: 'var(--reader-fg, var(--color-text))' }}
+                            className="text-xs sm:text-sm font-bold truncate leading-tight text-[color:var(--color-text-primary)]"
                             title={metadata?.title}
                         >
                             {metadata?.title || "Loading..."}
                         </h1>
                         {formatLocation() && (
                             <div
-                                className="text-[10px] sm:text-[11px] truncate font-mono font-medium mt-0.5 leading-tight"
-                                style={{ color: 'var(--reader-fg, var(--color-text))', opacity: 0.75 }}
+                                className="text-[10px] sm:text-[11px] truncate font-mono font-medium mt-0.5 leading-tight text-[color:var(--color-text-secondary)]"
                             >
                                 {formatLocation()}
                             </div>
@@ -371,8 +358,7 @@ export function WindowTitlebar({
                 <button
                     ref={menuButtonRef}
                     onClick={onToggleMenu}
-                    className={cn(ICON_BUTTON_CLASS, isMenuOpen && ICON_BUTTON_ACTIVE_CLASS)}
-                    style={{ color: 'var(--reader-fg)' }}
+                    className={cn(ICON_BUTTON_CLASS, isMenuOpen && ICON_BUTTON_ACTIVE_CLASS, "text-[color:var(--color-text-primary)]")}
                     aria-label="More options"
                 >
                     <EllipsisVertical className="w-5 h-5" />
@@ -387,9 +373,9 @@ export function WindowTitlebar({
 
                 {showDesktopWindowControls && (
                     <div className="hidden lg:flex items-center gap-1 ml-2 pl-2 border-l border-[var(--color-border)]">
-                        <button onClick={handleMinimize} className={ICON_BUTTON_CLASS} aria-label="Minimize"><Minus className="w-5 h-5" /></button>
-                        <button onClick={handleMaximize} className={ICON_BUTTON_CLASS} aria-label={isMaximized ? "Restore" : "Maximize"}><Maximize2 className="w-5 h-5" /></button>
-                        <button onClick={handleClose} className={cn(ICON_BUTTON_CLASS, "hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]")} aria-label="Close"><X className="w-5 h-5" /></button>
+                        <button onClick={handleMinimize} className={cn(ICON_BUTTON_CLASS, "text-[color:var(--color-text-primary)]")} aria-label="Minimize"><Minus className="w-5 h-5" /></button>
+                        <button onClick={handleMaximize} className={cn(ICON_BUTTON_CLASS, "text-[color:var(--color-text-primary)]")} aria-label={isMaximized ? "Restore" : "Maximize"}><Maximize2 className="w-5 h-5" /></button>
+                        <button onClick={handleClose} className={cn(ICON_BUTTON_CLASS, "text-[color:var(--color-text-primary)] hover:bg-[color:color-mix(in_srgb,var(--color-error)_14%,transparent)] hover:text-[color:var(--color-error)]")} aria-label="Close"><X className="w-5 h-5" /></button>
                     </div>
                 )}
             </div>
