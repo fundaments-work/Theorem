@@ -368,9 +368,29 @@ export function DiscoverPage() {
                             })}
                         </div>
                     </div>
+                ) : searchQuery.trim().length >= 2 && searchResults.length === 0 ? (
+                    /* Search with No Results */
+                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] p-8 animate-fade-in">
+                        <Search className="h-10 w-10 text-[color:var(--color-text-muted)] stroke-1" />
+                        <h2 className="text-sm font-bold text-[color:var(--color-text-primary)]">
+                            No books found for &ldquo;{searchQuery}&rdquo;
+                        </h2>
+                        <p className="text-xs text-[color:var(--color-text-muted)] max-w-sm">
+                            We couldn't find any public domain titles matching your search. Try searching by author, title, or topic.
+                        </p>
+                        <button
+                            onClick={() => {
+                                setSearchQuery("");
+                                startTransition(() => setSearchResults([]));
+                            }}
+                            className="mt-2 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                        >
+                            Clear Search
+                        </button>
+                    </div>
                 ) : (
                     /* Editorial Storefront Mode */
-                    <div className="space-y-10 animate-fade-in">
+                    <div className="space-y-12 animate-fade-in">
                         {/* Hero Spotlight Banner */}
                         {heroBook && (
                             <div

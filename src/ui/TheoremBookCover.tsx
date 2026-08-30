@@ -46,33 +46,33 @@ export function TheoremBookCover({
     return (
         <div
             className={cn(
-                "relative aspect-[2/3] w-full overflow-hidden p-3 sm:p-3.5 select-none flex flex-col justify-between",
-                "bg-[var(--color-surface-muted)] border border-[var(--color-border)] shadow-sm transition-transform duration-200",
+                "relative aspect-[2/3] w-full overflow-hidden p-3.5 sm:p-4 select-none flex flex-col justify-between",
+                "bg-[#0e0e11] text-[#f4f4f5] border border-[#27272a] shadow-sm transition-transform duration-200",
                 className
             )}
         >
-            {/* Subtle Spine & Frame Accents */}
-            <div className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--color-border)] opacity-60" />
-            <div className="absolute inset-2 border border-[var(--color-border-subtle)] pointer-events-none rounded-[1px] opacity-40" />
+            {/* Matte spine accent & inner frame */}
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#27272a] opacity-80" />
+            <div className="absolute inset-2 border border-[#27272a] pointer-events-none rounded-[1px] opacity-60" />
 
             {/* Top Series / Badge Header */}
             <div className="relative z-10 text-center pt-1 min-h-[14px]">
                 {badge ? (
-                    <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.2em] uppercase text-[color:var(--color-text-muted)]">
+                    <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.2em] uppercase text-[#71717a]">
                         {badge}
                     </span>
                 ) : (
-                    <div className="w-6 h-[1px] mx-auto mt-2 bg-[var(--color-border)] opacity-40" />
+                    <div className="w-6 h-[1px] mx-auto mt-2 bg-[#3f3f46] opacity-40" />
                 )}
             </div>
 
             {/* Centered Title & Author Block */}
             <div className="relative z-10 flex flex-col items-center justify-center my-auto py-2 text-center">
-                <h3 className="font-serif text-xs sm:text-sm font-bold leading-snug line-clamp-4 tracking-tight px-1 text-[color:var(--color-text-primary)]">
+                <h3 className="font-serif text-xs sm:text-sm font-bold leading-snug line-clamp-4 tracking-tight px-1 text-white drop-shadow-sm">
                     {cleanTitle}
                 </h3>
-                <div className="w-5 h-[1px] mx-auto my-2 bg-[var(--color-border)] opacity-60" />
-                <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.14em] font-medium truncate max-w-[90%] text-[color:var(--color-text-secondary)] opacity-80">
+                <div className="w-5 h-[1px] mx-auto my-2 bg-[#3f3f46] opacity-60" />
+                <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.14em] font-medium truncate max-w-[90%] text-[#a1a1aa]">
                     {cleanAuthor}
                 </p>
             </div>
@@ -80,10 +80,10 @@ export function TheoremBookCover({
             {/* Bottom Emblem */}
             <div className="relative z-10 flex items-center justify-center gap-1.5 pb-1">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="0" y="0" width="3" height="24" className="fill-[var(--color-text-muted)] opacity-60" />
-                    <rect x="0" y="10.5" width="15" height="3" className="fill-[var(--color-text-muted)] opacity-60" />
+                    <rect x="0" y="0" width="3" height="24" fill="#71717a" opacity="0.8" />
+                    <rect x="0" y="10.5" width="15" height="3" fill="#71717a" opacity="0.8" />
                 </svg>
-                <span className="text-[7px] tracking-[0.25em] uppercase font-bold text-[color:var(--color-text-muted)] opacity-70">
+                <span className="text-[7px] tracking-[0.25em] uppercase font-bold text-[#71717a] opacity-80">
                     THEOREM
                 </span>
             </div>

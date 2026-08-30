@@ -132,11 +132,24 @@ function filterActualBooks(entries: OpdsEntry[]): OpdsEntry[] {
 
     return entries
         .filter((entry) => {
-            const lower = (entry.title || "").toLowerCase().trim();
+            const rawTitle = (entry.title || "").trim();
+            const lower = rawTitle.toLowerCase();
             if (invalidKeywords.has(lower)) return false;
+
+            // Reject empty search results / notice entries
+            if (
+                lower.includes("no results") ||
+                lower.includes("returned no") ||
+                lower.includes("no books found") ||
+                lower.includes("not found") ||
+                lower.startsWith("search results for")
+            ) {
+                return false;
+            }
+
             if (entry.id.includes("/subjects/") || entry.id.includes("/bookshelves/") || entry.id.includes("/authors/")) return false;
             if (entry.navUrl && (entry.navUrl.includes("/subjects/") || entry.navUrl.includes("/bookshelves/") || entry.navUrl.includes("/authors/"))) return false;
-            if (!entry.title || entry.title.trim().length < 2) return false;
+            if (!rawTitle || rawTitle.length < 2) return false;
             return true;
         })
         .map((entry) => {
