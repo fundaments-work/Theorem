@@ -404,41 +404,51 @@ export class View extends HTMLElement {
                 return
             }
 
-            // In-place footnote / citation popover
+            // In-place footnote / citation popover (Theorem Lens)
             const epubType = (a.getAttributeNS?.('http://www.idpf.org/2007/ops', 'type') || a.getAttribute('epub:type') || '').toLowerCase()
             const role = (a.getAttribute('role') || '').toLowerCase()
-            const isSup = a.matches('sup') || a.closest('sup') || a.classList.contains('footnote-ref') || a.classList.contains('noteref')
-            const isFootnoteRef = epubType.includes('noteref') || epubType.includes('footnote') || role.includes('doc-noteref') || isSup || href.includes('#fn') || href.includes('#note')
+            const isSup = a.matches('sup') || a.closest('sup') || a.classList.contains('footnote-ref') || a.classList.contains('noteref') || a.classList.contains('citation') || a.classList.contains('reference')
+            const isFootnoteRef = epubType.includes('noteref') || epubType.includes('footnote') || epubType.includes('biblioref') || role.includes('doc-noteref') || role.includes('doc-biblioref') || isSup || href.includes('#fn') || href.includes('#note') || href.includes('#ftn') || href.includes('#ref')
 
-            if (isFootnoteRef) {
+            if (isFootnoteRef || href.includes('#')) {
                 try {
                     const resolved = await book.resolveHref(href)
                     if (resolved) {
                         const targetDoc = (resolved.index === index) ? doc : await book.sections[resolved.index]?.createDocument?.()
                         if (targetDoc) {
-                            const targetEl = resolved.anchor ? resolved.anchor(targetDoc) : null
+                            let targetEl = resolved.anchor ? resolved.anchor(targetDoc) : null
+                            if (!targetEl && href.includes('#')) {
+                                const id = href.split('#')[1]
+                                if (id) targetEl = targetDoc.getElementById(id)
+                            }
                             if (targetEl) {
-                                const text = targetEl.textContent?.trim() || ''
-                                const html = targetEl.innerHTML || text
-                                if (text) {
-                                    const rect = a.getBoundingClientRect()
-                                    const frameRect = doc.defaultView?.frameElement?.getBoundingClientRect()
-                                    window.parent?.postMessage({
-                                        type: 'foliate-footnote',
-                                        text,
-                                        html,
-                                        href,
-                                        title: a.getAttribute('title') || a.textContent || 'Footnote',
-                                        rect: {
-                                            top: (frameRect?.top || 0) + rect.top,
-                                            left: (frameRect?.left || 0) + rect.left,
-                                            bottom: (frameRect?.top || 0) + rect.bottom,
-                                            right: (frameRect?.left || 0) + rect.right,
-                                            width: rect.width,
-                                            height: rect.height,
-                                        }
-                                    }, '*')
-                                    return
+                                const targetRole = (targetEl.getAttribute('role') || '').toLowerCase()
+                                const targetEpubType = (targetEl.getAttributeNS?.('http://www.idpf.org/2007/ops', 'type') || targetEl.getAttribute('epub:type') || '').toLowerCase()
+                                const isTargetNote = isFootnoteRef || targetEl.tagName === 'ASIDE' || targetRole.includes('doc-footnote') || targetRole.includes('doc-endnote') || targetRole.includes('doc-biblioentry') || targetEpubType.includes('footnote') || targetEpubType.includes('endnote') || targetEl.classList.contains('footnote') || targetEl.classList.contains('endnote')
+                                
+                                if (isTargetNote) {
+                                    const text = targetEl.textContent?.trim() || ''
+                                    const html = targetEl.innerHTML || text
+                                    if (text) {
+                                        const rect = a.getBoundingClientRect()
+                                        const frameRect = doc.defaultView?.frameElement?.getBoundingClientRect()
+                                        window.parent?.postMessage({
+                                            type: 'foliate-footnote',
+                                            text,
+                                            html,
+                                            href,
+                                            title: a.getAttribute('title') || a.textContent?.trim() || 'Theorem Lens',
+                                            rect: {
+                                                top: (frameRect?.top || 0) + rect.top,
+                                                left: (frameRect?.left || 0) + rect.left,
+                                                bottom: (frameRect?.top || 0) + rect.bottom,
+                                                right: (frameRect?.left || 0) + rect.right,
+                                                width: rect.width,
+                                                height: rect.height,
+                                            }
+                                        }, '*')
+                                        return
+                                    }
                                 }
                             }
                         }
