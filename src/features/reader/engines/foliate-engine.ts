@@ -1056,11 +1056,13 @@ export class FoliateEngine {
         try {
             await this.view.next(distance);
             this.applyZoomSync();
-            // NOTE: scheduleSettingsUpdate() was previously called 350ms after
-            // every page turn as a workaround for new chapters rendering at the
-            // wrong zoom level. This is now handled by eagerly injecting active
-            // styles in the paginator's afterLoad hook (see #display in
-            // paginator.js), so the timer is no longer needed here.
+            // scheduleSettingsUpdate() keeps font-size/theme in sync on
+            // page turns (matches the same call in goTo / goToFraction).
+            // The old 350ms *setTimeout* workaround has been removed — styles
+            // are now eagerly injected in afterLoad on chapter boundary. This
+            // immediate RAF call is non-thrashing and covers within-chapter
+            // turns as well.
+            this.scheduleSettingsUpdate();
         } finally {
             this._navigationInProgress = false;
         }
@@ -1073,8 +1075,7 @@ export class FoliateEngine {
         try {
             await this.view.prev(distance);
             this.applyZoomSync();
-            // Styles are now injected eagerly at chapter-load time; no
-            // post-turn re-injection needed. See paginator.js #display().
+            this.scheduleSettingsUpdate();
         } finally {
             this._navigationInProgress = false;
         }
