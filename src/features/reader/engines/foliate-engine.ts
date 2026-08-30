@@ -1056,11 +1056,11 @@ export class FoliateEngine {
         try {
             await this.view.next(distance);
             this.applyZoomSync();
-            if (!this.isFixedLayoutFormat) {
-                setTimeout(() => {
-                    this.scheduleSettingsUpdate();
-                }, 350);
-            }
+            // NOTE: scheduleSettingsUpdate() was previously called 350ms after
+            // every page turn as a workaround for new chapters rendering at the
+            // wrong zoom level. This is now handled by eagerly injecting active
+            // styles in the paginator's afterLoad hook (see #display in
+            // paginator.js), so the timer is no longer needed here.
         } finally {
             this._navigationInProgress = false;
         }
@@ -1073,11 +1073,8 @@ export class FoliateEngine {
         try {
             await this.view.prev(distance);
             this.applyZoomSync();
-            if (!this.isFixedLayoutFormat) {
-                setTimeout(() => {
-                    this.scheduleSettingsUpdate();
-                }, 350);
-            }
+            // Styles are now injected eagerly at chapter-load time; no
+            // post-turn re-injection needed. See paginator.js #display().
         } finally {
             this._navigationInProgress = false;
         }

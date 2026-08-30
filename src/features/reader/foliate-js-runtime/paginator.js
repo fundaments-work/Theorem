@@ -258,12 +258,27 @@ class View {
 
                 const layout = beforeRender?.({ vertical, rtl, background })
                 this.#iframe.style.display = 'block'
-                this.render(layout)
-                this.#observer.observe(doc.body)
 
-                doc.fonts.ready.then(() => this.expand())
-
-                resolve()
+                // Pre-layout image settlement barrier: wait for all images
+                // to finish GPU decoding (max 120ms) before measuring column
+                // geometry. Without this, images start at 0px height, column
+                // page count is calculated wrong, and the reader jumps/reflows
+                // when images finish loading asynchronously.
+                const images = Array.from(doc.body.querySelectorAll('img'))
+                const decodeAll = images.map(img =>
+                    img.complete
+                        ? Promise.resolve()
+                        : img.decode().catch(() => {}))
+                const timeout = new Promise(r => setTimeout(r, 120))
+                Promise.race([
+                    Promise.allSettled(decodeAll),
+                    timeout,
+                ]).then(() => {
+                    this.render(layout)
+                    this.#observer.observe(doc.body)
+                    doc.fonts.ready.then(() => this.expand())
+                    resolve()
+                })
             }, { once: true })
             this.#iframe.src = src
         })
@@ -329,21 +344,47 @@ class View {
         const { width, height, margin } = this.#layout
         const vertical = this.#vertical
         const doc = this.document
+        // Leave a 32px safety buffer below image max so parent paragraph margins
+        // and captions never push the total block past the column height, which
+        // would force the browser to fragment the image across two columns.
+        const safeHeight = Math.max(100, height - margin * 2 - 32)
+        const safeWidth = Math.max(100, width - margin * 2)
         for (const el of doc.body.querySelectorAll('img, svg, video')) {
-            
             const { maxHeight, maxWidth } = doc.defaultView.getComputedStyle(el)
             setStylesImportant(el, {
                 'max-height': vertical
                     ? (maxHeight !== 'none' && maxHeight !== '0px' ? maxHeight : '100%')
-                    : `${height - margin * 2}px`,
+                    : `${safeHeight}px`,
                 'max-width': vertical
-                    ? `${width - margin * 2}px`
+                    ? `${safeWidth}px`
                     : (maxWidth !== 'none' && maxWidth !== '0px' ? maxWidth : '100%'),
+                'height': 'auto',
+                'width': 'auto',
                 'object-fit': 'contain',
                 'page-break-inside': 'avoid',
+                '-webkit-column-break-inside': 'avoid',
                 'break-inside': 'avoid',
                 'box-sizing': 'border-box',
+                'display': 'block',
             })
+        }
+        // Apply break-inside: avoid to common EPUB image parent containers
+        // (figure, p, div, section) so the container block itself is also
+        // prevented from being split across column boundaries.
+        const breakAvoidStyles = {
+            'page-break-inside': 'avoid',
+            '-webkit-column-break-inside': 'avoid',
+            'break-inside': 'avoid',
+        }
+        for (const el of doc.body.querySelectorAll('figure')) {
+            setStylesImportant(el, breakAvoidStyles)
+        }
+        // Target paragraphs and divs that directly contain an img/svg child
+        for (const el of doc.body.querySelectorAll('p > img, p > svg, p > video, div > img, div > svg, section > img')) {
+            const parent = el.parentElement
+            if (parent && parent !== doc.body) {
+                setStylesImportant(parent, breakAvoidStyles)
+            }
         }
     }
     expand() {
@@ -799,11 +840,16 @@ export class Paginator extends HTMLElement {
         this.#pageOffset = offset
         const el = this.#view?.element
         if (el) {
-            const axis = this.#vertical ? 'Y' : 'X'
+            const vertical = this.#vertical
+            // Use translate3d to force GPU layer promotion, preventing CPU
+            // re-rasterization of large multi-column/image layouts on every
+            // frame of the transition animation.
             el.style.transition = animate
                 ? 'transform 0.3s cubic-bezier(0, 0, 0.58, 1)'
                 : 'none'
-            el.style.transform = `translate${axis}(${-offset}px)`
+            el.style.transform = vertical
+                ? `translate3d(0, ${-offset}px, 0)`
+                : `translate3d(${-offset}px, 0, 0)`
         }
         this.dispatchEvent(new Event('scroll'))
     }
@@ -846,44 +892,91 @@ export class Paginator extends HTMLElement {
     #onTouchStart(e) {
         const touch = e.changedTouches[0]
         this.#touchState = {
+            startX: touch?.screenX, startY: touch?.screenY,
             x: touch?.screenX, y: touch?.screenY,
             t: e.timeStamp,
-            vx: 0, xy: 0,
+            vx: 0, vy: 0,
+            // Accumulated displacement from start of gesture
+            totalDx: 0, totalDy: 0,
+            // Axis locked once determined ('h' = horizontal, 'v' = vertical, null = undecided)
+            axis: null,
         }
     }
     #onTouchMove(e) {
         const state = this.#touchState
+        if (!state) return
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
-        if (this.scrolled || state.pinched) return
+        if (state.pinched) return
         if (e.touches.length > 1) {
             if (this.#touchScrolled) e.preventDefault()
             return
         }
-        
+
+        // Bail immediately if user has active text selection (highlight drag)
         if (Date.now() < this.#selectionActiveUntil) return
         const sel = this.#view?.document?.getSelection?.()
         if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
             this.#selectionActiveUntil = Date.now() + 1500
             return
         }
-        e.preventDefault()
+
         const touch = e.changedTouches[0]
         const x = touch.screenX, y = touch.screenY
         const dx = state.x - x, dy = state.y - y
         const dt = e.timeStamp - state.t
+
+        // Determine axis lock on first movement past 8px
+        if (!state.axis) {
+            const absDx = Math.abs(state.startX - x)
+            const absDy = Math.abs(state.startY - y)
+            if (absDx > 8 || absDy > 8) {
+                state.axis = absDx > absDy ? 'h' : 'v'
+            }
+        }
+
+        // If scrolled mode or vertical axis gesture, don't intercept
+        if (this.scrolled || state.axis === 'v') return
+
+        // Only act on horizontal swipe
+        if (state.axis !== 'h') return
+
+        e.preventDefault()
+
+        // Update rolling velocity (exponential smoothing for stability)
+        if (dt > 0) {
+            const alpha = 0.7
+            state.vx = alpha * (dx / dt) + (1 - alpha) * (state.vx || 0)
+            state.vy = alpha * (dy / dt) + (1 - alpha) * (state.vy || 0)
+        }
+
+        state.totalDx = x - state.startX
         state.x = x
         state.y = y
         state.t = e.timeStamp
-        state.vx = dx / dt
-        state.vy = dy / dt
-        
+
+        // Real-time 1:1 finger tracking: translate the view under the finger
+        // Apply rubberband resistance factor when overscrolling at chapter edges
+        const [offset, a, b] = this.#scrollBounds
+        const rawDelta = this.#rtl ? state.totalDx : -state.totalDx
+        const atBoundary = (rawDelta < 0 && a === 0) || (rawDelta > 0 && b === 0)
+        const delta = atBoundary ? rawDelta * 0.3 : rawDelta
+        const next = Math.max(
+            this.#rtl ? offset - b : offset - a,
+            Math.min(
+                this.#rtl ? offset + a : offset + b,
+                offset + delta,
+            ),
+        )
+        this.#setViewPosition(next, false)
         this.#touchScrolled = true
     }
     #onTouchEnd() {
         this.#touchScrolled = false
         if (this.scrolled) return
+        if (!this.#touchState) return
 
+        // Don't snap if user had an active text selection
         if (Date.now() < this.#selectionActiveUntil) return
         const sel = this.#view?.document?.getSelection?.()
         if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
@@ -891,9 +984,30 @@ export class Paginator extends HTMLElement {
             return
         }
 
+        // Only snap on horizontal swipes
+        if (this.#touchState.axis !== 'h') return
+
         requestAnimationFrame(() => {
-            if (globalThis.visualViewport.scale === 1)
-                this.snap(this.#touchState.vx, this.#touchState.vy)
+            if (globalThis.visualViewport.scale !== 1) return
+            const state = this.#touchState
+            const size = this.size
+            // Commit the page turn if:
+            //   - displacement exceeded 25% of screen width (slow drag completion), OR
+            //   - flick velocity exceeded 0.25 px/ms (quick swipe)
+            const totalDx = state.totalDx ?? 0
+            const velocity = state.vx ?? 0
+            const displaced = Math.abs(totalDx) > size * 0.25
+            const flicked = Math.abs(velocity) > 0.25
+            if (displaced || flicked) {
+                // Use velocity for snap direction; fall back to displacement direction
+                const effectiveVx = Math.abs(velocity) > 0.05
+                    ? velocity
+                    : (this.#rtl ? totalDx : -totalDx) > 0 ? 0.5 : -0.5
+                this.snap(effectiveVx, state.vy ?? 0)
+            } else {
+                // Snap back to current page
+                this.#scrollToPage(this.page, 'snap')
+            }
         })
     }
     
@@ -1022,6 +1136,18 @@ export class Paginator extends HTMLElement {
                     const $styleBefore = doc.createElement('style')
                     doc.head.prepend($styleBefore)
                     const $style = doc.createElement('style')
+                    // Eagerly inject any already-active styles so the new
+                    // chapter document inherits zoom/font-size/theme on its
+                    // very first rendered frame, eliminating the post-turn
+                    // style-injection workaround in the engine layer.
+                    if (this.#styles) {
+                        if (Array.isArray(this.#styles)) {
+                            $styleBefore.textContent = this.#styles[0] ?? ''
+                            $style.textContent = this.#styles[1] ?? ''
+                        } else {
+                            $style.textContent = this.#styles
+                        }
+                    }
                     doc.head.append($style)
                     this.#styleMap.set(doc, [$styleBefore, $style])
                 }

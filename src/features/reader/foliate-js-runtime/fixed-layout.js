@@ -84,9 +84,19 @@ export class FixedLayout extends HTMLElement {
         this.#root.append(element)
         if (!src) return { blank: true, element, iframe }
         return new Promise(resolve => {
-            iframe.addEventListener('load', () => {
+            iframe.addEventListener('load', async () => {
                 const doc = iframe.contentDocument
                 this.dispatchEvent(new CustomEvent('load', { detail: { doc, index } }))
+
+                // Await image decode so naturalWidth/naturalHeight are available
+                // before getViewport() reads them. Without this, CBZ comics and
+                // fixed-layout EPUBs without a <meta viewport> fall back to the
+                // dummy 1000×2000 box, distorting all aspect ratios.
+                const img = doc.querySelector('img')
+                if (img && !img.complete) {
+                    await img.decode().catch(() => {})
+                }
+
                 const { width, height } = getViewport(doc, this.defaultViewport)
                 resolve({
                     element, iframe,
