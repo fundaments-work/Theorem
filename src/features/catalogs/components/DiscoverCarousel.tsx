@@ -59,10 +59,10 @@ export function DiscoverCarousel({
             {/* Horizontal Scroll Track */}
             <div
                 ref={scrollContainerRef}
-                className="flex items-start gap-4 overflow-x-auto pb-4 pt-1 -mx-1 px-1 scrollbar-none overscroll-x-contain"
+                className="flex items-start gap-5 overflow-x-auto pb-4 pt-1 -mx-1 px-1 scrollbar-none overscroll-x-contain"
             >
                 {section.books.map((book) => (
-                    <div key={book.id} className="w-[140px] sm:w-[155px] md:w-[170px] shrink-0">
+                    <div key={book.id} className="w-[125px] sm:w-[140px] md:w-[155px] shrink-0">
                         <DiscoverBookCard entry={book} onSelect={onSelectBook} />
                     </div>
                 ))}

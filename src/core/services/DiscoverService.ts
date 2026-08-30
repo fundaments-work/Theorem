@@ -39,18 +39,51 @@ const CURATED_FEEDS = [
     },
 ];
 
-// In-memory cache for instant section switching
+// In-memory and persistent cache for instant 0ms section switching
+const DISCOVER_CACHE_KEY = "theorem_discover_cache_v2";
 const sectionCache = new Map<string, { data: DiscoverSection; timestamp: number }>();
-const CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
 
-async function fetchFeedSafe(url: string): Promise<OpdsFeed | null> {
+function loadPersistedCache(): DiscoverSection[] {
+    try {
+        if (typeof window === "undefined" || !window.localStorage) return [];
+        const raw = localStorage.getItem(DISCOVER_CACHE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+        }
+    } catch {
+        // Ignore parse errors
+    }
+    return [];
+}
+
+function savePersistedCache(sections: DiscoverSection[]) {
+    try {
+        if (typeof window !== "undefined" && window.localStorage && sections.length > 0) {
+            localStorage.setItem(DISCOVER_CACHE_KEY, JSON.stringify(sections));
+        }
+    } catch {
+        // Storage quota exceeded or unavailable
+    }
+}
+
+async function fetchFeedSafe(url: string, timeoutMs = 6000): Promise<OpdsFeed | null> {
     try {
         let rawXml = "";
         if (isTauri()) {
             const { invoke } = await import("@tauri-apps/api/core");
-            rawXml = await invoke<string>("fetch_rss_feed", { url });
+            const fetchPromise = invoke<string>("fetch_rss_feed", { url });
+            const timeoutPromise = new Promise<string>((_, reject) =>
+                setTimeout(() => reject(new Error("Timeout")), timeoutMs)
+            );
+            rawXml = await Promise.race([fetchPromise, timeoutPromise]);
         } else {
-            const res = await fetch(url);
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timer);
             if (!res.ok) return null;
             rawXml = await res.text();
         }
@@ -121,6 +154,20 @@ function filterActualBooks(entries: OpdsEntry[]): OpdsEntry[] {
 }
 
 export const DiscoverService = {
+    getCachedSections(): DiscoverSection[] {
+        if (sectionCache.size > 0) {
+            return Array.from(sectionCache.values()).map((v) => v.data);
+        }
+        const persisted = loadPersistedCache();
+        if (persisted.length > 0) {
+            persisted.forEach((section) => {
+                sectionCache.set(section.id, { data: section, timestamp: Date.now() });
+            });
+            return persisted;
+        }
+        return [];
+    },
+
     async loadCuratedSections(forceRefresh = false): Promise<DiscoverSection[]> {
         const results: DiscoverSection[] = [];
 
@@ -134,7 +181,7 @@ export const DiscoverService = {
                 }
 
                 try {
-                    const feed = await fetchFeedSafe(feedConfig.url);
+                    const feed = await fetchFeedSafe(feedConfig.url, 6000);
                     if (feed && feed.entries && feed.entries.length > 0) {
                         const validBooks = filterActualBooks(feed.entries);
                         if (validBooks.length > 0) {
@@ -156,7 +203,11 @@ export const DiscoverService = {
 
         // Maintain display order based on CURATED_FEEDS
         const ordered = CURATED_FEEDS.map((f) => results.find((r) => r.id === f.id)).filter(Boolean) as DiscoverSection[];
-        return ordered.length > 0 ? ordered : results;
+        const finalSections = ordered.length > 0 ? ordered : results;
+        if (finalSections.length > 0) {
+            savePersistedCache(finalSections);
+        }
+        return finalSections;
     },
 
     async search(query: string): Promise<OpdsEntry[]> {

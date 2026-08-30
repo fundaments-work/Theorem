@@ -1955,10 +1955,14 @@ export function LibraryPage() {
                                                         />
                                                     </div>
                                                 ) : (
-                                                    <div className={isCompactView
-                                                        ? "grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 pb-2"
-                                                        : "grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 pb-5"
-                                                    }>
+                                                    <div
+                                                        style={{
+                                                            display: "grid",
+                                                            gridTemplateColumns: `repeat(${effectiveCols}, minmax(0, 1fr))`,
+                                                            gap: isCompactView ? "8px" : "20px",
+                                                            paddingBottom: isCompactView ? "8px" : "20px",
+                                                        }}
+                                                    >
                                                         {rowItems.map((book) => (
                                                             <MemoizedBookCard
                                                                 key={book.id}

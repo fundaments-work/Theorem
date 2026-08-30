@@ -19,8 +19,9 @@ import { DiscoverCarousel } from "./components/DiscoverCarousel";
 import { DiscoverDetailModal } from "./components/DiscoverDetailModal";
 
 export function DiscoverPage() {
-    const [sections, setSections] = useState<DiscoverSection[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const cachedInitialSections = useMemo(() => DiscoverService.getCachedSections(), []);
+    const [sections, setSections] = useState<DiscoverSection[]>(cachedInitialSections);
+    const [isLoading, setIsLoading] = useState(cachedInitialSections.length === 0);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -41,13 +42,14 @@ export function DiscoverPage() {
     const requestIdRef = useRef(0);
     const [containerWidth, setContainerWidth] = useState(1024);
 
-    // Responsive columns for virtual search grid
+    // Responsive columns matching Library grid exactly
     const effectiveCols = useMemo(() => {
-        if (containerWidth < 640) return 2;
-        if (containerWidth < 768) return 3;
-        if (containerWidth < 1024) return 4;
-        if (containerWidth < 1280) return 5;
-        return 6;
+        if (containerWidth >= 1536) return 8;
+        if (containerWidth >= 1280) return 7;
+        if (containerWidth >= 1024) return 5;
+        if (containerWidth >= 768) return 4;
+        if (containerWidth >= 640) return 3;
+        return 2;
     }, [containerWidth]);
 
     // Track scroll container width for responsive virtualizer
@@ -67,8 +69,11 @@ export function DiscoverPage() {
 
     const loadDiscoverFeed = useCallback(async (forceRefresh = false) => {
         const currentReq = ++requestIdRef.current;
-        if (forceRefresh) setIsRefreshing(true);
-        else setIsLoading(true);
+        if (forceRefresh) {
+            setIsRefreshing(true);
+        } else if (sections.length === 0) {
+            setIsLoading(true);
+        }
         setError(null);
 
         try {
@@ -78,14 +83,14 @@ export function DiscoverPage() {
                     if (data && data.length > 0) {
                         setSections(data);
                         setError(null);
-                    } else {
+                    } else if (sections.length === 0) {
                         setSections([]);
                         setError("No public domain books found at this time.");
                     }
                 });
             }
         } catch (err: any) {
-            if (requestIdRef.current === currentReq) {
+            if (requestIdRef.current === currentReq && sections.length === 0) {
                 console.error("Discover load error:", err);
                 startTransition(() => {
                     setError("Could not connect to online libraries.");
@@ -97,7 +102,7 @@ export function DiscoverPage() {
                 setIsRefreshing(false);
             }
         }
-    }, []);
+    }, [sections.length]);
 
     useEffect(() => {
         void loadDiscoverFeed(false);
@@ -343,14 +348,12 @@ export function DiscoverPage() {
                                         className="pb-4"
                                     >
                                         <div
-                                            className={cn(
-                                                "grid gap-4 w-full",
-                                                effectiveCols === 2 && "grid-cols-2",
-                                                effectiveCols === 3 && "grid-cols-3",
-                                                effectiveCols === 4 && "grid-cols-4",
-                                                effectiveCols === 5 && "grid-cols-5",
-                                                effectiveCols === 6 && "grid-cols-6"
-                                            )}
+                                            style={{
+                                                display: "grid",
+                                                gridTemplateColumns: `repeat(${effectiveCols}, minmax(0, 1fr))`,
+                                                gap: "20px",
+                                            }}
+                                            className="w-full"
                                         >
                                             {rowBooks.map((entry) => (
                                                 <DiscoverBookCard

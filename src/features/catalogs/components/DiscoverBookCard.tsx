@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "../../../core/lib/utils";
+import { cn, normalizeAuthor } from "../../../core/lib/utils";
 import { useLibraryStore, useUIStore } from "../../../core/store";
 import { DiscoverService } from "../../../core/services/DiscoverService";
 import type { OpdsEntry } from "../../../core/types";
@@ -57,12 +57,12 @@ export function DiscoverBookCard({
         <div
             onClick={() => onSelect?.(entry)}
             className={cn(
-                "group relative flex flex-col cursor-pointer select-none transition-transform active:scale-[0.98]",
+                "group flex flex-col text-left w-full select-none cursor-pointer",
                 className
             )}
         >
             {/* Book Cover Container */}
-            <div className="relative aspect-[2/3] w-full rounded-lg overflow-hidden border border-[var(--color-border)] shadow-sm group-hover:shadow-md group-hover:border-[var(--color-border-strong)] transition-all duration-200">
+            <div className="relative aspect-[2/3] bg-[var(--color-surface-muted)] mb-2.5 overflow-hidden border border-[var(--color-border)] transition-all duration-300 group-hover:shadow-lg group-hover:-translate-y-1">
                 <TheoremBookCover
                     title={entry.title}
                     author={entry.author}
@@ -74,15 +74,15 @@ export function DiscoverBookCard({
                     onClick={handleGet}
                     disabled={isDownloading}
                     className={cn(
-                        "absolute bottom-2.5 right-2.5 z-20 flex items-center justify-center rounded-full transition-all duration-200 shadow-md",
+                        "absolute bottom-2 right-2 z-20 flex items-center justify-center rounded-sm transition-all duration-200 shadow-md",
                         isBookInLibrary
-                            ? "h-7 px-2.5 bg-zinc-900 text-zinc-100 text-[10px] font-bold border border-zinc-700 hover:bg-black"
-                            : "h-7 px-2.5 bg-white text-black text-[10px] font-bold hover:bg-neutral-200 active:scale-95"
+                            ? "h-6 px-2 bg-zinc-900 text-zinc-100 text-[9px] font-bold border border-zinc-700 hover:bg-black"
+                            : "h-6 px-2 bg-white text-black text-[9px] font-bold hover:bg-neutral-200 active:scale-95"
                     )}
                     title={isBookInLibrary ? "In Library" : "Add to Library"}
                 >
                     {isDownloading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <Loader2 className="h-3 w-3 animate-spin" />
                     ) : isBookInLibrary ? (
                         <span className="flex items-center gap-1">
                             <Check className="h-3 w-3" />
@@ -98,12 +98,12 @@ export function DiscoverBookCard({
             </div>
 
             {/* Title & Author */}
-            <div className="mt-2.5 flex flex-col min-w-0">
-                <h3 className="text-xs font-bold text-[color:var(--color-text-primary)] truncate group-hover:text-[color:var(--color-accent)] transition-colors">
+            <div className="px-0.5 min-w-0">
+                <h3 className="font-bold text-[11px] uppercase tracking-wide text-[color:var(--color-text-primary)] line-clamp-2 mb-0.5 transition-colors group-hover:text-[color:var(--color-accent)] break-words">
                     {entry.title}
                 </h3>
-                <p className="text-[11px] font-medium text-[color:var(--color-text-muted)] truncate mt-0.5">
-                    {entry.author || "Public Domain"}
+                <p className="text-[10px] font-medium text-[color:var(--color-text-secondary)] line-clamp-1 opacity-60 uppercase tracking-tight">
+                    {normalizeAuthor(entry.author) || "Public Domain"}
                 </p>
             </div>
         </div>
