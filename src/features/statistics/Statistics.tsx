@@ -52,19 +52,21 @@ function ProgressBar({
     current,
     target,
     label,
+    unit,
 }: {
     current: number;
     target: number;
     label: string;
+    unit?: string;
 }) {
-    const percentage = Math.min(100, (current / target) * 100);
+    const percentage = Math.min(100, (current / Math.max(1, target)) * 100);
 
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between text-sm gap-2">
                 <span className="text-[color:var(--color-text-secondary)] truncate">{label}</span>
                 <span className="text-[color:var(--color-text-primary)] font-medium shrink-0">
-                    {current} / {target}
+                    {current} / {target}{unit ? ` ${unit}` : ""}
                 </span>
             </div>
             <div className="h-2 bg-[var(--color-surface-muted)] overflow-hidden">
@@ -211,11 +213,9 @@ function ActivityHeatmap({ dailyActivity }: { dailyActivity: DailyReadingActivit
                 ))}
                 <span>More</span>
             </div>
-            {todayMinutes > 0 && (
-                <p className="text-xs text-[color:var(--color-text-muted)]">
-                    Today: {todayMinutes} minutes read
-                </p>
-            )}
+            <p className="text-xs text-[color:var(--color-text-muted)]">
+                Today: {todayMinutes} minute{todayMinutes === 1 ? '' : 's'} read
+            </p>
         </div>
     );
 }
@@ -226,6 +226,11 @@ export function StatisticsPage() {
     const stats = useSettingsStore((state) => state.stats);
     const setRoute = useUIStore((state) => state.setRoute);
     const [showShareModal, setShowShareModal] = useState(false);
+
+    const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+    const todayMinutes = useMemo(() => {
+        return (stats.dailyActivity || []).find((a) => a.date === todayStr)?.minutes || 0;
+    }, [stats.dailyActivity, todayStr]);
 
     const booksReadThisYear = useMemo(() => countBooksReadThisYear(books), [books]);
 
@@ -312,9 +317,9 @@ export function StatisticsPage() {
                 />
                 <StatCard
                     icon={<Target className="w-5 h-5" />}
-                    label="Daily Goal"
-                    value={`${stats.dailyGoal} min`}
-                    subtext={`${booksReadThisYear}/${stats.yearlyBookGoal} books this year`}
+                    label="Today's Reading"
+                    value={`${todayMinutes} / ${stats.dailyGoal} min`}
+                    subtext={todayMinutes >= stats.dailyGoal ? "Daily goal achieved! 🎉" : `${Math.max(0, stats.dailyGoal - todayMinutes)} min remaining today`}
                 />
                 <StatCard
                     icon={<Flame className="w-5 h-5" />}
@@ -376,16 +381,38 @@ export function StatisticsPage() {
                             <h2 className="font-semibold text-[color:var(--color-text-primary)]">Reading Goals</h2>
                         </div>
                         <div className="space-y-5 sm:space-y-6">
-                            <ProgressBar
-                                label="Yearly Book Goal"
-                                current={booksReadThisYear}
-                                target={stats.yearlyBookGoal}
-                            />
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-[color:var(--color-text-secondary)]">Books Completed</span>
-                                <span className="text-[color:var(--color-text-primary)] font-medium">
-                                    {completedBooks}
-                                </span>
+                            <div>
+                                <ProgressBar
+                                    label="Today's Reading Goal"
+                                    current={todayMinutes}
+                                    target={stats.dailyGoal}
+                                    unit="min"
+                                />
+                                <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)] mt-1.5">
+                                    <span>
+                                        {todayMinutes >= stats.dailyGoal
+                                            ? "Daily goal completed! 🎉"
+                                            : `${Math.max(0, stats.dailyGoal - todayMinutes)} min to reach daily goal`}
+                                    </span>
+                                    <span className="font-medium text-[color:var(--color-text-primary)]">
+                                        {Math.round((todayMinutes / Math.max(1, stats.dailyGoal)) * 100)}%
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <ProgressBar
+                                    label="Yearly Book Goal"
+                                    current={booksReadThisYear}
+                                    target={stats.yearlyBookGoal}
+                                    unit="books"
+                                />
+                                <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)] mt-1.5">
+                                    <span>{completedBooks} total books finished</span>
+                                    <span className="font-medium text-[color:var(--color-text-primary)]">
+                                        {Math.round((booksReadThisYear / Math.max(1, stats.yearlyBookGoal)) * 100)}%
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </section>
