@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Annotation, HighlightColor } from "../../core/types";
 import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
+import { useSettingsStore } from "../../core/store";
 
 export interface BookInfo {
     title: string;
@@ -46,8 +47,42 @@ function formatTime(minutes: number): string {
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-function getThemeStyles(theme: CardTheme, accent?: HighlightColor) {
-    const tintBg = accent ? HIGHLIGHT_SOLID_COLORS[accent] : "#2d6a6e";
+function getThemeStyles(
+    theme: CardTheme,
+    appTheme: "light" | "dark" | "system",
+    appAccent: string,
+    accent?: HighlightColor,
+) {
+    const defaultAccent = appAccent && appAccent !== "#000000" ? appAccent : "#0f766e";
+    const tintBg = accent ? HIGHLIGHT_SOLID_COLORS[accent] : defaultAccent;
+
+    if (theme === "match") {
+        const isDark = typeof document !== "undefined"
+            ? document.body.classList.contains("theme-dark") ||
+              appTheme === "dark" ||
+              (appTheme === "system" && Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches))
+            : appTheme === "dark";
+
+        const customAccent = appAccent && appAccent !== "#000000" ? appAccent : (isDark ? "#4fd1c5" : "#0f766e");
+
+        if (isDark) {
+            return {
+                bg: "#131418",
+                fg: "#f3f0e8",
+                accent: customAccent,
+                cardBg: "rgba(255,255,255,0.06)",
+                border: "rgba(255,255,255,0.1)",
+            };
+        }
+        return {
+            bg: "#faf8f5",
+            fg: "#18181b",
+            accent: customAccent,
+            cardBg: "rgba(0,0,0,0.04)",
+            border: "rgba(0,0,0,0.08)",
+        };
+    }
+
     switch (theme) {
         case "dark":
             return { bg: "#131418", fg: "#f3f0e8", accent: "#4fd1c5", cardBg: "rgba(255,255,255,0.06)", border: "rgba(255,255,255,0.1)" };
@@ -61,9 +96,14 @@ function getThemeStyles(theme: CardTheme, accent?: HighlightColor) {
 }
 
 export function ShareCard({ kind, annotation, book, statsData, format, theme, showNote }: ShareCardProps) {
+    const appTheme = useSettingsStore((s) => s.settings.theme);
+    const appAccent = useSettingsStore((s) => s.settings.accentColor);
     const height = CARD_HEIGHTS[format];
     const isStory = format === "story";
-    const colors = useMemo(() => getThemeStyles(theme, annotation?.color), [theme, annotation?.color]);
+    const colors = useMemo(
+        () => getThemeStyles(theme, appTheme, appAccent, annotation?.color),
+        [theme, appTheme, appAccent, annotation?.color]
+    );
 
     const text = annotation?.selectedText || "";
     const charCount = text.length;
