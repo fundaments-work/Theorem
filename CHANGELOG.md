@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-30
+
+### Added
+
+- **Theorem Lens (In-Place Footnote & Citation Peek Portals)** — Tapping footnotes,
+  citations, `<aside>` blocks, and bibliographic references now displays a dynamic,
+  anchored popover balloon right above or below the link. Allows reading notes,
+  inspecting formulas, and copying text without losing reading position or jumping
+  to the back of the book.
+- **Companion Audiobook & Immersion Integration Plan** — Added full architectural
+  specification and GitHub issue template for attaching DRM-free `.m4b`/`.mp3` audio tracks
+  to books with native variable-speed playback, sleep timers, and Iroh P2P sync.
+- **Comprehensive Project Documentation & Strategy** — Added `docs/discover.md`,
+  `docs/COMPETITIVE_STRATEGY_BLUEPRINT.md`, and synchronized all feature guides with
+  the latest codebase implementation.
+
+### Fixed & Performance
+
+- **PDF Navigation Synchronization & Smooth Scroll** — Resolved previous-page
+  navigation stalls in continuous scroll mode by deferring DOM scrolling until target
+  page wrappers are mounted, and pre-loading adjacent pages (`page - 1`, `page + 1`)
+  in single-page mode for instantaneous (0ms) page transitions.
+- **PDF Single-Page Auto-Fit & Centering** — Switched to `m-auto` layout on page wrappers
+  to prevent CSS flex clipping and automatically applied `page-fit` zoom when switching
+  to single-page presentation mode.
+- **PDF Engine Memory Reclamation & Disposal** — Ensured `loadingTask.destroy()` is
+  invoked on document unmount, deallocated canvas pixel buffers (`width = 0; height = 0;`),
+  cleared text layers, and triggered `sqliteShrinkMemory()` on reader close.
+- **PDF Presentation Mode Persistence** — Added `presentationMode` (`scroll` vs `paged`)
+  to `PdfViewState` in SQLite and Zod sync schemas, persisting per-book display settings.
+- **Universal Route Error Boundary Layout** — Standardized error handling layout and
+  typography across all app views.
+
 ## [1.2.1] - 2026-08-29
 
 ### Added
