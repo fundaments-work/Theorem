@@ -89,6 +89,8 @@ interface RssStore {
     openArticleInReader: (article: RssArticle) => void;
     closeArticleViewer: () => void;
     setCurrentArticle: (article: RssArticle | null) => void;
+    updateArticleContent: (articleId: string, fullContent: string) => void;
+    fetchFullArticle: (articleId: string) => Promise<string | null>;
     setError: (error?: string) => void;
 }
 
@@ -302,6 +304,44 @@ export const useRssStore = create<RssStore>()(
 
             setCurrentArticle: (article: RssArticle | null) => {
                 set({ currentArticle: article });
+            },
+
+            updateArticleContent: (articleId: string, fullContent: string) => {
+                set(state => ({
+                    articles: state.articles.map(a =>
+                        a.id === articleId
+                            ? { ...a, fullContent, contentSource: 'extracted' }
+                            : a
+                    ),
+                    currentArticle: state.currentArticle?.id === articleId
+                        ? { ...state.currentArticle, fullContent, contentSource: 'extracted' }
+                        : state.currentArticle,
+                }));
+                scheduleMutationSync();
+            },
+
+            fetchFullArticle: async (articleId: string) => {
+                const state = get();
+                const article = state.articles.find(a => a.id === articleId) || state.currentArticle;
+                if (!article || !article.url) {
+                    return null;
+                }
+
+                if (article.fullContent) {
+                    return article.fullContent;
+                }
+
+                try {
+                    const { ArticleExtractorService } = await import("../services/ArticleExtractorService");
+                    const extracted = await ArticleExtractorService.extractFromUrl(article.url);
+                    if (extracted && extracted.content) {
+                        get().updateArticleContent(articleId, extracted.content);
+                        return extracted.content;
+                    }
+                } catch (err) {
+                    console.error("[RssStore] Failed to fetch full article:", err);
+                }
+                return null;
             },
 
             setError: (error?: string) => {

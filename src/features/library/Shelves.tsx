@@ -6,7 +6,7 @@ import { getShelfColor, getShelfInitials } from "../../core/lib/design-tokens";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
 import { ShelfModal } from "./components/modals/ShelfModal";
-import { ConfirmDialog, TheoremBookCover } from "../../ui";
+import { ConfirmDialog } from "../../ui";
 import { MemoizedBookCard, BookInfoModal, AddToShelfModal, RenameBookModal } from "./Library";
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
@@ -108,20 +108,30 @@ const ShelfCard = memo(function ShelfCard({ shelf, books, actualBookCount, onCli
             <button onClick={onClick} className="block w-full">
                 <div className="aspect-[16/10] bg-[var(--color-surface-muted)] p-4">
                     {displayBooks.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-2 h-full">
+                        <div className="grid grid-cols-2 gap-2 h-full overflow-hidden">
                             {displayBooks.map((book, i) => (
                                 <div
                                     key={book.id}
-                                    className="relative overflow-hidden shadow-sm aspect-[2/3]"
+                                    className="relative overflow-hidden shadow-sm bg-[var(--color-surface)] h-full w-full"
                                     style={{
-                                        transform: `translateY(${i % 2 === 1 ? "8px" : "0"})`,
+                                        transform: `translateY(${i % 2 === 1 ? "6px" : "0"})`,
                                     }}
                                 >
-                                    <TheoremBookCover
-                                        title={book.title}
-                                        author={book.author}
-                                        coverUrl={book.coverPath}
-                                    />
+                                    {book.coverPath ? (
+                                        <img
+                                            src={book.coverPath}
+                                            alt={book.title}
+                                            className="w-full h-full object-cover"
+                                            loading="lazy"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full bg-[#0e0e11] border border-[#27272a] flex flex-col items-center justify-center p-1.5 text-center">
+                                            <BookOpen className="w-4 h-4 text-zinc-500 mb-0.5 shrink-0" />
+                                            <span className="text-[8px] font-serif font-bold text-zinc-300 line-clamp-2 leading-tight">
+                                                {book.title}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                             

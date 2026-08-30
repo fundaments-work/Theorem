@@ -360,6 +360,8 @@ export interface RssArticle {
     url: string;           
     content: string;       
     summary?: string;
+    fullContent?: string;
+    contentSource?: 'feed' | 'extracted';
     imageUrl?: string;
     publishedAt?: Date;
     fetchedAt: Date;

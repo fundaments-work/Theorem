@@ -40,6 +40,71 @@ function resolveFontFamily(fontFamily: FontFamily): string {
     }
 }
 
+function getCleanTextRange(range: Range, container: HTMLElement): Range | null {
+    try {
+        const clone = range.cloneRange();
+
+        // Find first text node if startContainer is not a text node
+        if (clone.startContainer.nodeType !== Node.TEXT_NODE) {
+            const walker = document.createTreeWalker(clone.startContainer, NodeFilter.SHOW_TEXT, null);
+            let firstText: Text | null = null;
+            while (walker.nextNode()) {
+                const node = walker.currentNode as Text;
+                if ((node.textContent?.length ?? 0) > 0 && container.contains(node)) {
+                    firstText = node;
+                    break;
+                }
+            }
+            if (firstText) {
+                clone.setStart(firstText, 0);
+            }
+        }
+
+        // Find last text node if endContainer is not a text node
+        if (clone.endContainer.nodeType !== Node.TEXT_NODE) {
+            const walker = document.createTreeWalker(clone.endContainer, NodeFilter.SHOW_TEXT, null);
+            let lastText: Text | null = null;
+            while (walker.nextNode()) {
+                const node = walker.currentNode as Text;
+                if ((node.textContent?.length ?? 0) > 0 && container.contains(node)) {
+                    lastText = node;
+                }
+            }
+            if (lastText) {
+                clone.setEnd(lastText, lastText.textContent?.length ?? 0);
+            }
+        }
+
+        // Trim leading whitespace from startContainer
+        if (clone.startContainer.nodeType === Node.TEXT_NODE) {
+            const text = clone.startContainer.textContent ?? "";
+            let offset = clone.startOffset;
+            while (offset < text.length && /\s/.test(text[offset])) {
+                offset++;
+            }
+            clone.setStart(clone.startContainer, Math.min(offset, text.length));
+        }
+
+        // Trim trailing whitespace from endContainer
+        if (clone.endContainer.nodeType === Node.TEXT_NODE) {
+            const text = clone.endContainer.textContent ?? "";
+            let offset = clone.endOffset;
+            while (offset > 0 && /\s/.test(text[offset - 1])) {
+                offset--;
+            }
+            clone.setEnd(clone.endContainer, Math.max(0, offset));
+        }
+
+        if (clone.collapsed || !clone.toString().trim()) {
+            return null;
+        }
+
+        return clone;
+    } catch {
+        return range;
+    }
+}
+
 export function ArticleReaderContent({
     article,
     feedTitle,
@@ -133,22 +198,29 @@ export function ArticleReaderContent({
             return;
         }
 
-        const range = selection.getRangeAt(0);
-        if (!contentRef.current?.contains(range.commonAncestorContainer)) {
+        const rawRange = selection.getRangeAt(0);
+        if (
+            !contentRef.current?.contains(rawRange.commonAncestorContainer)
+            && !contentRef.current?.contains(rawRange.startContainer)
+        ) {
             return;
         }
 
-        const text = selection.toString().trim();
+        const cleanRange = getCleanTextRange(rawRange, contentRef.current!) ?? rawRange;
+        const text = cleanRange.toString().trim();
         if (!text) {
             return;
         }
 
-        const rect = range.getBoundingClientRect();
+        // Clear native browser selection immediately on mouseup so no OS blue/gray box is ever painted
+        selection.removeAllRanges();
+
+        const rect = cleanRange.getBoundingClientRect();
         onTextSelect(text, {
             x: rect.left + rect.width / 2,
             y: rect.top,
             height: Math.max(rect.height, 24),
-        }, range.cloneRange());
+        }, cleanRange.cloneRange());
     }, [contentRef, onTextSelect]);
 
     const articleIdRef = useRef(article.id);
@@ -162,18 +234,17 @@ export function ArticleReaderContent({
     return (
         <div
             ref={scrollContainerRef}
-            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar [content-visibility:auto] overscroll-contain pb-[env(safe-area-inset-bottom)]"
+            className="h-full min-h-0 flex-1 overflow-y-auto custom-scrollbar overscroll-contain pb-[env(safe-area-inset-bottom)]"
             style={{
                 WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",
             }}
         >
             <article
-                className="mx-auto w-full max-w-[80ch] px-6 py-12 md:px-12 md:py-20 lg:px-8"
+                className="mx-auto w-full max-w-[80ch] px-6 py-12 md:px-12 md:py-20 lg:px-8 select-text"
                 onMouseUp={handleMouseUp}
-                style={{ userSelect: "none", WebkitUserSelect: "none" }}
             >
-                <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)]" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
+                <header className="mb-10 pb-6 border-b border-[var(--color-border-subtle)]">
                     <div className="mb-4 flex flex-wrap items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-[color:var(--color-text-secondary)]">
                         {feedTitle && (
                             <span className="border border-[var(--color-border)] px-2 py-1 text-[color:var(--color-text-primary)]">

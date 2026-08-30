@@ -287,10 +287,10 @@ export function WindowTitlebar({
         >
             <div className="h-12 lg:h-11 flex items-center gap-1 pl-3 pr-2">
                 
-                <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[360px]">
+                <div className="flex items-center gap-1 min-w-0 flex-1 lg:flex-none lg:max-w-[480px]">
                     <button
                         onClick={onBack}
-                        className={cn(ICON_BUTTON_CLASS, "mr-2 shrink-0")}
+                        className={cn(ICON_BUTTON_CLASS, "mr-1 sm:mr-2 shrink-0")}
                         style={{ color: 'var(--reader-fg, var(--color-text))' }}
                         aria-label="Back to Library"
                         title="Back to Library"
@@ -298,16 +298,17 @@ export function WindowTitlebar({
                         <ArrowLeft className="w-5 h-5" />
                     </button>
 
-                    <div className="flex-1 min-w-0 text-left overflow-hidden pr-2">
+                    <div className="flex-1 min-w-0 text-left overflow-hidden pr-1 sm:pr-2">
                         <h1
                             className="text-xs sm:text-sm font-bold truncate leading-tight"
                             style={{ color: 'var(--reader-fg, var(--color-text))' }}
+                            title={metadata?.title}
                         >
                             {metadata?.title || "Loading..."}
                         </h1>
                         {formatLocation() && (
                             <div
-                                className="text-[10px] sm:text-[11px] truncate font-mono font-medium mt-0.5"
+                                className="text-[10px] sm:text-[11px] truncate font-mono font-medium mt-0.5 leading-tight"
                                 style={{ color: 'var(--reader-fg, var(--color-text))', opacity: 0.75 }}
                             >
                                 {formatLocation()}
@@ -316,8 +317,8 @@ export function WindowTitlebar({
                     </div>
                 </div>
 
-                {/* Center Spacer */}
-                <div className="flex-1 min-w-0 pointer-events-none" />
+                {/* Center Spacer (Desktop only to prevent taking mobile title space) */}
+                <div className="hidden lg:block flex-1 min-w-0 pointer-events-none" />
 
                 <div className="hidden sm:flex items-center gap-0.5 mr-0.5">
                     <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search" aria-label="Search">

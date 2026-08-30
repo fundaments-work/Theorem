@@ -136,6 +136,28 @@ button:disabled {
     text-transform: none;
 }
 
+mark.article-highlight,
+mark.article-temp-selection {
+    display: inline;
+    color: inherit;
+    padding: 0.05em 0;
+    border-radius: 2px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+
+mark.article-highlight:hover,
+mark.article-temp-selection:hover {
+    filter: brightness(0.92);
+}
+
+.theme-dark mark.article-highlight:hover,
+.theme-dark mark.article-temp-selection:hover {
+    filter: brightness(1.15);
+}
+
 
 ::-webkit-scrollbar {
     width: 10px;
@@ -175,6 +197,26 @@ button:disabled {
 .theme-dark ::selection {
     background-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
     color: var(--color-text-primary);
+}
+
+.rss-article-content,
+.rss-article-content * {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.rss-article-content ::selection,
+.rss-article-content *::selection,
+[data-reading-mode] article ::selection,
+[data-reading-mode] article *::selection {
+    background-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    color: inherit;
+}
+
+.rss-article-content br::selection,
+.rss-article-content hr::selection,
+[data-reading-mode] article br::selection {
+    background: transparent;
 }
 
 

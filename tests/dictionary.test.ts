@@ -202,15 +202,16 @@ describe("Dictionary integration with real download", () => {
 
     it("downloads, extracts and lookups return definitions for common words", async () => {
         let response: Response;
+        let buffer: ArrayBuffer;
         try {
             response = await fetch(DICT_URL, { signal: AbortSignal.timeout(5000) });
             if (!response.ok) return;
+            buffer = await response.arrayBuffer();
         } catch {
             // Skip offline / timeout test run
             return;
         }
 
-        const buffer = await response.arrayBuffer();
         expect(buffer.byteLength).toBeGreaterThan(1_000_000); // ~31 MB
 
         // Extract ZIP using JSZip-like parsing (we'll use the zip.js lib)

@@ -178,8 +178,9 @@ function createHighlightMark(highlightId: string, color: HighlightColor): HTMLEl
     mark.dataset.highlightColor = color;
     mark.style.backgroundColor = HIGHLIGHT_COLOR_TOKENS[color].soft;
     mark.style.borderRadius = "2px";
-    mark.style.padding = "0 1px";
+    mark.style.padding = "0.05em 0";
     mark.style.color = "inherit";
+    mark.style.display = "inline";
     mark.style.setProperty("box-decoration-break", "clone");
     mark.style.setProperty("-webkit-box-decoration-break", "clone");
     return mark;
@@ -249,9 +250,19 @@ function wrapTextNodeRange(
     highlightId: string,
     color: HighlightColor,
 ): boolean {
-    const nodeLength = textNode.textContent?.length ?? 0;
-    const boundedStart = clamp(startOffset, 0, nodeLength);
-    const boundedEnd = clamp(endOffset, boundedStart, nodeLength);
+    const nodeText = textNode.textContent ?? "";
+    let boundedStart = clamp(startOffset, 0, nodeText.length);
+    let boundedEnd = clamp(endOffset, boundedStart, nodeText.length);
+
+    // Trim leading whitespace in this text node so empty spaces around words are never highlighted
+    while (boundedStart < boundedEnd && /\s/.test(nodeText[boundedStart])) {
+        boundedStart++;
+    }
+    // Trim trailing whitespace in this text node
+    while (boundedEnd > boundedStart && /\s/.test(nodeText[boundedEnd - 1])) {
+        boundedEnd--;
+    }
+
     if (boundedEnd <= boundedStart) {
         return false;
     }
@@ -287,7 +298,9 @@ function applyHighlightAcrossTextNodes(
     const walker = document.createTreeWalker(contentRoot, NodeFilter.SHOW_TEXT, null);
     while (walker.nextNode()) {
         const textNode = walker.currentNode as Text;
-        if ((textNode.textContent?.length ?? 0) === 0) {
+        const content = textNode.textContent ?? "";
+        // Skip empty or pure-whitespace text nodes (e.g. newlines or spaces between tags)
+        if (!content.trim()) {
             continue;
         }
         if (textNode.parentElement?.closest("mark.article-highlight")) {
@@ -309,6 +322,108 @@ function applyHighlightAcrossTextNodes(
         const startOffset = textNode === range.startContainer ? range.startOffset : 0;
         const endOffset = textNode === range.endContainer ? range.endOffset : textLength;
         if (wrapTextNodeRange(textNode, startOffset, endOffset, highlightId, color)) {
+            appliedCount += 1;
+        }
+    }
+
+    return appliedCount > 0;
+}
+
+function removeTempSelectionMarks(contentRoot: HTMLElement | null): void {
+    if (!contentRoot) return;
+    const tempMarks = contentRoot.querySelectorAll<HTMLElement>("mark.article-temp-selection");
+    tempMarks.forEach((mark) => {
+        unwrapMark(mark);
+    });
+}
+
+function createTempSelectionMark(color: HighlightColor): HTMLElement {
+    const mark = document.createElement("mark");
+    mark.className = "article-temp-selection";
+    mark.style.backgroundColor = HIGHLIGHT_COLOR_TOKENS[color].soft;
+    mark.style.borderRadius = "2px";
+    mark.style.padding = "0.05em 0";
+    mark.style.color = "inherit";
+    mark.style.display = "inline";
+    mark.style.setProperty("box-decoration-break", "clone");
+    mark.style.setProperty("-webkit-box-decoration-break", "clone");
+    return mark;
+}
+
+function wrapTempTextNodeRange(
+    textNode: Text,
+    startOffset: number,
+    endOffset: number,
+    color: HighlightColor,
+): boolean {
+    const nodeText = textNode.textContent ?? "";
+    let boundedStart = clamp(startOffset, 0, nodeText.length);
+    let boundedEnd = clamp(endOffset, boundedStart, nodeText.length);
+
+    while (boundedStart < boundedEnd && /\s/.test(nodeText[boundedStart])) {
+        boundedStart++;
+    }
+    while (boundedEnd > boundedStart && /\s/.test(nodeText[boundedEnd - 1])) {
+        boundedEnd--;
+    }
+
+    if (boundedEnd <= boundedStart) {
+        return false;
+    }
+
+    let highlightedNode = textNode;
+    if (boundedStart > 0) {
+        highlightedNode = textNode.splitText(boundedStart);
+    }
+
+    const selectedLength = boundedEnd - boundedStart;
+    if (selectedLength < (highlightedNode.textContent?.length ?? 0)) {
+        highlightedNode.splitText(selectedLength);
+    }
+
+    const parent = highlightedNode.parentNode;
+    if (!parent) {
+        return false;
+    }
+
+    const mark = createTempSelectionMark(color);
+    parent.replaceChild(mark, highlightedNode);
+    mark.appendChild(highlightedNode);
+    return true;
+}
+
+function applyTempSelectionAcrossTextNodes(
+    range: Range,
+    contentRoot: HTMLElement,
+    color: HighlightColor,
+): boolean {
+    const textNodes: Text[] = [];
+    const walker = document.createTreeWalker(contentRoot, NodeFilter.SHOW_TEXT, null);
+    while (walker.nextNode()) {
+        const textNode = walker.currentNode as Text;
+        const content = textNode.textContent ?? "";
+        if (!content.trim()) {
+            continue;
+        }
+        if (textNode.parentElement?.closest("mark.article-highlight, mark.article-temp-selection")) {
+            continue;
+        }
+        if (!range.intersectsNode(textNode)) {
+            continue;
+        }
+        textNodes.push(textNode);
+    }
+
+    if (textNodes.length === 0) {
+        return false;
+    }
+
+    let appliedCount = 0;
+    for (const textNode of textNodes) {
+        const textLength = textNode.textContent?.length ?? 0;
+        const startOffset = textNode === range.startContainer ? range.startOffset : 0;
+        const endOffset = textNode === range.endContainer ? range.endOffset : textLength;
+        if (wrapTempTextNodeRange(textNode, startOffset, endOffset, color)) {
             appliedCount += 1;
         }
     }
@@ -413,6 +528,67 @@ function buildRangeFromSnapshot(
     }
 }
 
+function getCleanTextRange(range: Range, container: HTMLElement): Range | null {
+    try {
+        const clone = range.cloneRange();
+
+        if (clone.startContainer.nodeType !== Node.TEXT_NODE) {
+            const walker = document.createTreeWalker(clone.startContainer, NodeFilter.SHOW_TEXT, null);
+            let firstText: Text | null = null;
+            while (walker.nextNode()) {
+                const node = walker.currentNode as Text;
+                if ((node.textContent?.length ?? 0) > 0 && container.contains(node)) {
+                    firstText = node;
+                    break;
+                }
+            }
+            if (firstText) {
+                clone.setStart(firstText, 0);
+            }
+        }
+
+        if (clone.endContainer.nodeType !== Node.TEXT_NODE) {
+            const walker = document.createTreeWalker(clone.endContainer, NodeFilter.SHOW_TEXT, null);
+            let lastText: Text | null = null;
+            while (walker.nextNode()) {
+                const node = walker.currentNode as Text;
+                if ((node.textContent?.length ?? 0) > 0 && container.contains(node)) {
+                    lastText = node;
+                }
+            }
+            if (lastText) {
+                clone.setEnd(lastText, lastText.textContent?.length ?? 0);
+            }
+        }
+
+        if (clone.startContainer.nodeType === Node.TEXT_NODE) {
+            const text = clone.startContainer.textContent ?? "";
+            let offset = clone.startOffset;
+            while (offset < text.length && /\s/.test(text[offset])) {
+                offset++;
+            }
+            clone.setStart(clone.startContainer, Math.min(offset, text.length));
+        }
+
+        if (clone.endContainer.nodeType === Node.TEXT_NODE) {
+            const text = clone.endContainer.textContent ?? "";
+            let offset = clone.endOffset;
+            while (offset > 0 && /\s/.test(text[offset - 1])) {
+                offset--;
+            }
+            clone.setEnd(clone.endContainer, Math.max(0, offset));
+        }
+
+        if (clone.collapsed || !clone.toString().trim()) {
+            return null;
+        }
+
+        return clone;
+    } catch {
+        return range;
+    }
+}
+
 function resolveSelectionRange(
     selectedRange: Range | null,
     selectionSnapshot: TextSelectionSnapshot | null,
@@ -424,7 +600,7 @@ function resolveSelectionRange(
         && isSelectionRangeWithinContent(selectedRange, contentRoot)
         && selectedRange.toString().trim().length > 0
     ) {
-        return selectedRange.cloneRange();
+        return getCleanTextRange(selectedRange, contentRoot);
     }
 
     if (!selectionSnapshot) {
@@ -438,12 +614,12 @@ function resolveSelectionRange(
 
     const expected = normalizeSelectionText(expectedText || selectionSnapshot.text);
     if (!expected) {
-        return restoredRange;
+        return getCleanTextRange(restoredRange, contentRoot);
     }
 
     const restoredText = normalizeSelectionText(restoredRange.toString());
     if (restoredText === expected || restoredText.includes(expected) || expected.includes(restoredText)) {
-        return restoredRange;
+        return getCleanTextRange(restoredRange, contentRoot);
     }
 
     return null;
@@ -461,16 +637,7 @@ function applyHighlightToRange(
         return false;
     }
 
-    const mark = createHighlightMark(highlightId, color);
-
-    try {
-        
-        workingRange.surroundContents(mark);
-        return true;
-    } catch {
-        
-        return applyHighlightAcrossTextNodes(workingRange, contentRoot, highlightId, color);
-    }
+    return applyHighlightAcrossTextNodes(workingRange, contentRoot, highlightId, color);
 }
 
 export const ArticleViewer = memo(function ArticleViewer({
@@ -737,6 +904,7 @@ export const ArticleViewer = memo(function ArticleViewer({
                 return;
             }
             if (showColorPicker) {
+                removeTempSelectionMarks(contentRef.current);
                 selectedRangeRef.current = null;
                 selectionSnapshotRef.current = null;
                 setShowColorPicker(false);
@@ -745,6 +913,7 @@ export const ArticleViewer = memo(function ArticleViewer({
                 return;
             }
             if (showNoteEditor) {
+                removeTempSelectionMarks(contentRef.current);
                 setShowNoteEditor(false);
                 return;
             }
@@ -772,11 +941,16 @@ export const ArticleViewer = memo(function ArticleViewer({
         }
 
         const contentRoot = contentRef.current;
+        if (!contentRoot) {
+            return;
+        }
+
+        // Remove any previous temporary selection marks
+        removeTempSelectionMarks(contentRoot);
+
         const rangeClone = range.cloneRange();
         selectedRangeRef.current = rangeClone;
-        selectionSnapshotRef.current = contentRoot
-            ? createSelectionSnapshot(rangeClone, contentRoot)
-            : null;
+        selectionSnapshotRef.current = createSelectionSnapshot(rangeClone, contentRoot);
 
         const startMark = getClosestHighlightMark(rangeClone.startContainer);
         const endMark = getClosestHighlightMark(rangeClone.endContainer);
@@ -798,6 +972,11 @@ export const ArticleViewer = memo(function ArticleViewer({
             setEditingHighlightId(null);
             setPendingHighlightColor("yellow");
             setSelectedText(normalizedText);
+
+            // Apply clean, line-by-line temporary highlight mark over the exact words
+            applyTempSelectionAcrossTextNodes(rangeClone, contentRoot, "yellow");
+            // Clear the ugly native browser selection immediately
+            clearBrowserSelection();
         }
 
         setColorPickerPosition(position);
@@ -810,46 +989,7 @@ export const ArticleViewer = memo(function ArticleViewer({
             saved: false,
         });
         setShowColorPicker(true);
-    }, [highlightAnnotations]);
-
-    useEffect(() => {
-        if (!showColorPicker || colorPickerMode !== "actions") {
-            return;
-        }
-
-        const contentRoot = contentRef.current;
-        if (!contentRoot) {
-            return;
-        }
-
-        const resolvedRange = resolveSelectionRange(
-            selectedRangeRef.current,
-            selectionSnapshotRef.current,
-            selectedText,
-            contentRoot,
-        );
-        if (!resolvedRange) {
-            return;
-        }
-
-        const frame = requestAnimationFrame(() => {
-            const selection = window.getSelection();
-            if (!selection) {
-                return;
-            }
-
-            try {
-                selection.removeAllRanges();
-                selection.addRange(resolvedRange);
-            } catch {
-                
-            }
-        });
-
-        return () => {
-            cancelAnimationFrame(frame);
-        };
-    }, [colorPickerMode, selectedText, showColorPicker]);
+    }, [clearBrowserSelection, highlightAnnotations]);
 
     const handleDeleteHighlightMark = useCallback((highlightId: string) => {
         const marks = contentRef.current?.querySelectorAll(
@@ -863,29 +1003,42 @@ export const ArticleViewer = memo(function ArticleViewer({
     const createHighlightAnnotation = useCallback((color: HighlightColor): string | null => {
         const selectionText = selectedText.trim();
         const contentRoot = contentRef.current;
-        const selectedRange = selectedRangeRef.current;
-        const selectionSnapshot = selectionSnapshotRef.current;
         if (!selectionText || !contentRoot || !articleAnnotationBookId) {
             return null;
         }
 
-        const rangeToHighlight = resolveSelectionRange(
-            selectedRange,
-            selectionSnapshot,
-            selectionText,
-            contentRoot,
-        );
-        if (!rangeToHighlight) {
-            return null;
+        const highlightId = crypto.randomUUID();
+
+        // If we have temporary selection marks in the DOM, convert them directly into permanent highlight marks
+        const tempMarks = Array.from(contentRoot.querySelectorAll<HTMLElement>("mark.article-temp-selection"));
+        let applied = false;
+        if (tempMarks.length > 0) {
+            tempMarks.forEach((mark) => {
+                mark.className = "article-highlight";
+                mark.dataset.highlightId = highlightId;
+                mark.dataset.highlightColor = color;
+                mark.style.backgroundColor = HIGHLIGHT_COLOR_TOKENS[color].soft;
+            });
+            applied = true;
+        } else {
+            const selectedRange = selectedRangeRef.current;
+            const selectionSnapshot = selectionSnapshotRef.current;
+            const rangeToHighlight = resolveSelectionRange(
+                selectedRange,
+                selectionSnapshot,
+                selectionText,
+                contentRoot,
+            );
+            if (rangeToHighlight) {
+                applied = applyHighlightToRange(rangeToHighlight, contentRoot, highlightId, color);
+            }
         }
 
-        const highlightId = crypto.randomUUID();
-        const applied = applyHighlightToRange(rangeToHighlight, contentRoot, highlightId, color);
         if (!applied) {
             return null;
         }
 
-        const locationSnapshot = selectionSnapshot ?? createSelectionSnapshot(rangeToHighlight, contentRoot);
+        const locationSnapshot = selectionSnapshotRef.current ?? (selectedRangeRef.current ? createSelectionSnapshot(selectedRangeRef.current, contentRoot) : null);
 
         addAnnotation({
             id: highlightId,
@@ -1520,6 +1673,7 @@ export const ArticleViewer = memo(function ArticleViewer({
                     }
                     : undefined}
                 onClose={() => {
+                    removeTempSelectionMarks(contentRef.current);
                     selectedRangeRef.current = null;
                     selectionSnapshotRef.current = null;
                     setShowColorPicker(false);
@@ -1543,6 +1697,7 @@ export const ArticleViewer = memo(function ArticleViewer({
                 selectedText={selectedText}
                 onSave={handleSaveNote}
                 onClose={() => {
+                    removeTempSelectionMarks(contentRef.current);
                     setShowNoteEditor(false);
                     setEditingNote("");
                     setEditingHighlightId(null);
