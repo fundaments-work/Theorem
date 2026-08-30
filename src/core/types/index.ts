@@ -41,6 +41,7 @@ export interface PdfViewState {
     totalPages: number;
     zoom: number;
     zoomMode: PdfZoomMode;
+    presentationMode?: 'scroll' | 'paged';
 }
 
 export interface Book {

@@ -776,6 +776,7 @@ export const useLibraryStore = create<LibraryStore>()(
                         totalPages: safeTotalPages,
                         zoom: safeZoom,
                         zoomMode: pdfState.zoomMode,
+                        presentationMode: pdfState.presentationMode,
                     };
 
                     const { books: updatedBooks, updatedBook } = updateBookById(
@@ -788,7 +789,8 @@ export const useLibraryStore = create<LibraryStore>()(
                                 && existingPdfViewState.page === safePdfViewState.page
                                 && existingPdfViewState.totalPages === safePdfViewState.totalPages
                                 && Math.abs(existingPdfViewState.zoom - safePdfViewState.zoom) < 0.0001
-                                && existingPdfViewState.zoomMode === safePdfViewState.zoomMode;
+                                && existingPdfViewState.zoomMode === safePdfViewState.zoomMode
+                                && existingPdfViewState.presentationMode === safePdfViewState.presentationMode;
                             const hasSameLocation = book.currentLocation === nextLocation;
                             const hasSameProgress = Math.abs((book.progress ?? 0) - safeProgress) < 0.0001;
                             const hasSamePageProgress = !!book.pageProgress
