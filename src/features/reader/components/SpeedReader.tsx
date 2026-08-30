@@ -121,12 +121,22 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
 
     // Smooth auto-scroll paragraph context to keep active word visible
     useEffect(() => {
-        if (!showContext || !activeWordRef.current) return;
-        activeWordRef.current.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest",
-            inline: "center",
-        });
+        if (!showContext || !activeWordRef.current || !contextScrollRef.current) return;
+        const container = contextScrollRef.current;
+        const activeEl = activeWordRef.current;
+
+        const containerTop = container.scrollTop;
+        const containerHeight = container.clientHeight;
+        const activeTop = activeEl.offsetTop - container.offsetTop;
+        const activeHeight = activeEl.offsetHeight;
+
+        // If active element is near edge or outside viewport, scroll it to center
+        if (activeTop < containerTop + 24 || activeTop + activeHeight > containerTop + containerHeight - 24) {
+            container.scrollTo({
+                top: Math.max(0, activeTop - containerHeight / 2 + activeHeight / 2),
+                behavior: "smooth",
+            });
+        }
     }, [currentIndex, showContext]);
 
     // Keyboard navigation
@@ -197,9 +207,9 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[200] flex flex-col select-none bg-[var(--color-background)] text-[var(--color-text-primary)] pt-[max(env(safe-area-inset-top,0px),0.5rem)] pb-[max(env(safe-area-inset-bottom,0px),1rem)]">
+        <div className="fixed inset-0 z-[200] flex flex-col select-none bg-[var(--color-background)] text-[var(--color-text-primary)] pt-[max(env(safe-area-inset-top,0px),0.25rem)] pb-[max(env(safe-area-inset-bottom,0px),0.75rem)]">
             {/* Top Toolbar */}
-            <div className="flex items-center justify-between shrink-0 min-h-11 px-5 border-b border-[var(--color-border)]">
+            <div className="flex items-center justify-between shrink-0 min-h-11 px-3 sm:px-5 border-b border-[var(--color-border)]">
                 <button
                     onClick={() => {
                         setIsPlaying(false);
@@ -210,13 +220,13 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
                     <X className="w-4 h-4" /> Close
                 </button>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 sm:gap-4">
                     <button
                         onClick={() => setShowContext(!showContext)}
                         className={cn(
-                            "flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold border transition-colors cursor-pointer",
+                            "flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold border transition-colors cursor-pointer rounded-sm",
                             showContext
-                                ? "bg-[var(--color-surface-muted)] text-[color:var(--color-text-primary)] border-[var(--color-border-strong)]"
+                                ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] border-[var(--color-accent)] shadow-xs"
                                 : "bg-transparent text-[color:var(--color-text-muted)] border-[var(--color-border)] hover:text-[color:var(--color-text-primary)]"
                         )}
                         title="Toggle Paragraph Context (C)"
@@ -225,11 +235,11 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
                         <span className="hidden sm:inline">Paragraph Context</span>
                     </button>
 
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2">
                         <span className="text-[11px] font-mono text-[color:var(--color-text-muted)]">
                             {currentIndex + 1} / {wordCount}
                         </span>
-                        <div className="w-24 h-1 overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)]">
+                        <div className="w-16 sm:w-24 h-1 overflow-hidden bg-[var(--color-surface-muted)] border border-[var(--color-border)]">
                             <div className="h-full bg-[var(--color-accent)] transition-all duration-150" style={{ width: `${progress}%` }} />
                         </div>
                     </div>
@@ -245,20 +255,20 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
             </div>
 
             {/* Main Reading Canvas */}
-            <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-4 overflow-hidden gap-6">
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-3 sm:px-6 md:px-8 py-2 sm:py-4 gap-3 sm:gap-5 overflow-hidden w-full max-w-3xl mx-auto">
                 {/* Spritz-style Optimal Recognition Point (ORP) Box */}
-                <div className="w-full max-w-2xl mx-auto flex flex-col items-center justify-center">
-                    <div className="relative w-full py-8 sm:py-12 border-y border-[var(--color-border)] bg-[var(--color-surface)]/50 backdrop-blur-sm shadow-sm flex items-center justify-center">
+                <div className="w-full shrink-0 flex flex-col items-center justify-center">
+                    <div className="relative w-full py-5 sm:py-8 md:py-10 border-y border-[var(--color-border)] bg-[var(--color-surface)]/60 backdrop-blur-sm shadow-sm flex items-center justify-center rounded-sm">
                         {/* Top and Bottom Center Focus Guides */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[3px] h-3.5 bg-[var(--color-accent)] rounded-b-sm" />
-                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[3px] h-3.5 bg-[var(--color-accent)] rounded-t-sm" />
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[3px] h-3 sm:h-4 bg-[var(--color-accent)] rounded-b-sm shadow-xs" />
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[3px] h-3 sm:h-4 bg-[var(--color-accent)] rounded-t-sm shadow-xs" />
 
                         {/* Centered Word with Fixed Focal Letter Alignment */}
-                        <div className="flex items-baseline w-full font-mono select-none px-4 text-4xl sm:text-5xl md:text-6xl font-medium tracking-normal">
+                        <div className="flex items-baseline w-full font-mono select-none px-4 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium tracking-normal">
                             <span className="flex-1 text-right text-[color:var(--color-text-primary)] whitespace-pre">
                                 {prefix}
                             </span>
-                            <span className="shrink-0 text-[color:var(--color-accent)] font-bold px-[0.5px]">
+                            <span className="shrink-0 text-[color:var(--color-accent)] font-black px-[0.5px] scale-105 drop-shadow-sm">
                                 {focal || (currentWord ? "" : "—")}
                             </span>
                             <span className="flex-1 text-left text-[color:var(--color-text-primary)] whitespace-pre">
@@ -267,19 +277,19 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
                         </div>
                     </div>
 
-                    <div className="mt-3 flex items-center gap-2 text-[10px] tracking-[0.25em] uppercase font-bold text-[color:var(--color-text-muted)]">
+                    <div className="mt-2 flex items-center gap-2 text-[10px] tracking-[0.25em] uppercase font-bold text-[color:var(--color-text-muted)]">
                         <span className={cn("inline-block w-1.5 h-1.5 rounded-full", isPlaying ? "bg-[var(--color-accent)] animate-pulse" : "bg-[var(--color-text-muted)]")} />
                         <span>{isPlaying ? "Reading" : "Paused"}</span>
                     </div>
                 </div>
 
-                {/* Paragraph Context Box */}
+                {/* Responsive Paragraph Context Stream Box */}
                 {showContext && (
                     <div
                         ref={contextScrollRef}
-                        className="w-full max-w-2xl max-h-40 sm:max-h-48 overflow-y-auto px-5 py-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-sm text-xs sm:text-sm leading-relaxed custom-scrollbar shadow-inner select-text transition-all duration-300"
+                        className="flex-1 min-h-[80px] max-h-[160px] sm:max-h-[220px] md:max-h-[280px] w-full overflow-y-auto px-3.5 sm:px-5 py-2.5 sm:py-3.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-sm text-xs sm:text-sm md:text-base leading-relaxed sm:leading-loose custom-scrollbar shadow-inner select-text transition-all duration-300"
                     >
-                        <div className="flex flex-wrap gap-x-1.5 gap-y-1">
+                        <div className="flex flex-wrap gap-x-1.5 gap-y-1 sm:gap-x-2 sm:gap-y-1.5">
                             {words.map((w, idx) => {
                                 const isCurrent = idx === currentIndex;
                                 const isPast = idx < currentIndex;
@@ -290,11 +300,11 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
                                         ref={isCurrent ? activeWordRef : null}
                                         onClick={() => handleWordClick(idx)}
                                         className={cn(
-                                            "cursor-pointer rounded-[2px] transition-colors duration-100",
+                                            "cursor-pointer rounded-[3px] transition-all duration-150",
                                             isCurrent
-                                                ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] font-bold px-1.5 py-0.5 shadow-sm scale-105 inline-block"
+                                                ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] font-bold px-1.5 py-0.5 shadow-sm ring-2 ring-[var(--color-accent)]/30 scale-105 inline-block mx-0.5"
                                                 : isPast
-                                                ? "text-[color:var(--color-text-muted)] opacity-60 hover:opacity-100"
+                                                ? "text-[color:var(--color-text-muted)] opacity-50 hover:opacity-90"
                                                 : "text-[color:var(--color-text-primary)] hover:text-[color:var(--color-accent)]"
                                         )}
                                     >
@@ -308,24 +318,24 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
             </div>
 
             {/* Bottom Controls Bar */}
-            <div className="shrink-0 px-4 sm:px-6 pb-3 sm:pb-5 space-y-3">
-                <div className="flex items-center justify-center gap-3 sm:gap-5 flex-wrap">
+            <div className="shrink-0 px-3 sm:px-6 pb-2 sm:pb-4 space-y-2 sm:space-y-3">
+                <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
                     <button
                         onClick={() => setWpm((w) => Math.max(50, w - 25))}
-                        className="flex items-center justify-center min-h-[40px] min-w-[40px] text-sm font-bold border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] cursor-pointer transition-colors"
+                        className="flex items-center justify-center min-h-[38px] min-w-[38px] sm:min-h-[40px] sm:min-w-[40px] text-sm font-bold border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] cursor-pointer transition-colors rounded-sm"
                         title="Decrease Speed"
                     >
                         −
                     </button>
 
-                    <div className="flex items-center gap-1.5 min-w-[4rem] justify-center font-mono">
-                        <span className="text-base font-bold text-[color:var(--color-text-primary)]">{wpm}</span>
-                        <span className="text-[10px] tracking-[0.05em] uppercase text-[color:var(--color-text-muted)]">wpm</span>
+                    <div className="flex items-center gap-1 min-w-[3.5rem] justify-center font-mono">
+                        <span className="text-sm sm:text-base font-bold text-[color:var(--color-text-primary)]">{wpm}</span>
+                        <span className="text-[9px] sm:text-[10px] tracking-[0.05em] uppercase text-[color:var(--color-text-muted)]">wpm</span>
                     </div>
 
                     <button
                         onClick={() => setWpm((w) => Math.min(2000, w + 25))}
-                        className="flex items-center justify-center min-h-[40px] min-w-[40px] text-sm font-bold border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] cursor-pointer transition-colors"
+                        className="flex items-center justify-center min-h-[38px] min-w-[38px] sm:min-h-[40px] sm:min-w-[40px] text-sm font-bold border border-[var(--color-border)] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] cursor-pointer transition-colors rounded-sm"
                         title="Increase Speed"
                     >
                         +
@@ -333,13 +343,13 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
 
                     <button
                         onClick={() => setIsPlaying(!isPlaying)}
-                        className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full transition-transform active:scale-95 bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] cursor-pointer shadow-md"
+                        className="flex items-center justify-center min-h-[42px] min-w-[42px] sm:min-h-[46px] sm:min-w-[46px] rounded-full transition-transform active:scale-95 bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] cursor-pointer shadow-md"
                         aria-label={isPlaying ? "Pause" : "Play"}
                     >
                         {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                     </button>
 
-                    <div className="w-28 sm:w-40 text-[color:var(--color-text-muted)]">
+                    <div className="w-24 sm:w-36 text-[color:var(--color-text-muted)]">
                         <input
                             type="range"
                             min={50}
@@ -353,7 +363,7 @@ export function SpeedReader({ isOpen, text, onClose, onAutoNext }: SpeedReaderPr
                     </div>
                 </div>
 
-                <div className="flex items-center justify-center gap-2 sm:gap-3 text-[10px] tracking-[0.08em] uppercase text-[color:var(--color-text-muted)] font-mono">
+                <div className="flex items-center justify-center gap-1.5 sm:gap-3 text-[9px] sm:text-[10px] tracking-[0.08em] uppercase text-[color:var(--color-text-muted)] font-mono flex-wrap">
                     <span>Space (Play/Pause)</span>
                     <span>·</span>
                     <span>↑↓ (WPM)</span>
