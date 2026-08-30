@@ -317,27 +317,8 @@ export function WindowTitlebar({
                     </div>
                 </div>
 
-                {/* Centered Desktop Reading Progress & Chapter Status */}
-                <div className="hidden lg:flex flex-1 items-center justify-center min-w-0 px-4 text-center pointer-events-none">
-                    <div className="flex items-center gap-2 max-w-lg truncate">
-                        {currentChapter && (
-                            <span
-                                className="text-xs font-medium truncate"
-                                style={{ color: 'var(--reader-fg, var(--color-text))', opacity: 0.85 }}
-                            >
-                                {currentChapter}
-                            </span>
-                        )}
-                        {formatLocation() && (
-                            <span
-                                className="text-[11px] font-mono font-medium shrink-0 px-2 py-0.5 rounded border border-[var(--color-border)] bg-[var(--color-surface-muted)]"
-                                style={{ color: 'var(--reader-fg, var(--color-text))' }}
-                            >
-                                {formatLocation()}
-                            </span>
-                        )}
-                    </div>
-                </div>
+                {/* Center Spacer */}
+                <div className="flex-1 min-w-0 pointer-events-none" />
 
                 <div className="hidden sm:flex items-center gap-0.5 mr-0.5">
                     <ToolbarButton onClick={onToggleSearch} active={activePanel === "search"} title="Search" aria-label="Search">

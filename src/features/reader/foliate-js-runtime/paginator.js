@@ -293,6 +293,7 @@ class View {
     scrolled({ gap, columnWidth }) {
         const vertical = this.#vertical
         const doc = this.document
+        if (!doc?.documentElement || !doc?.body) return
         setStylesImportant(doc.documentElement, {
             'box-sizing': 'border-box',
             'padding': vertical ? `${gap}px 0` : `0 ${gap}px`,
@@ -313,6 +314,7 @@ class View {
         this.#size = vertical ? height : width
 
         const doc = this.document
+        if (!doc?.documentElement || !doc?.body) return
         setStylesImportant(doc.documentElement, {
             'box-sizing': 'border-box',
             'column-width': `${Math.trunc(columnWidth)}px`,
@@ -344,6 +346,7 @@ class View {
         const { width, height, margin } = this.#layout
         const vertical = this.#vertical
         const doc = this.document
+        if (!doc?.body || !doc?.defaultView) return
         // Leave a 32px safety buffer below image max so parent paragraph margins
         // and captions never push the total block past the column height, which
         // would force the browser to fragment the image across two columns.
@@ -388,7 +391,9 @@ class View {
         }
     }
     expand() {
-        const { documentElement } = this.document
+        const doc = this.document
+        if (!doc?.documentElement || !doc?.body) return
+        const { documentElement } = doc
         if (this.#column) {
             const side = this.#vertical ? 'height' : 'width'
             const otherSide = this.#vertical ? 'width' : 'height'
@@ -443,7 +448,8 @@ class View {
         return this.#overlayer
     }
     destroy() {
-        if (this.document) this.#observer.unobserve(this.document.body)
+        if (this.document?.body) this.#observer.unobserve(this.document.body)
+        this.#observer.disconnect()
     }
 }
 
