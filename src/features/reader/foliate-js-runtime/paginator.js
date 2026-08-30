@@ -424,7 +424,8 @@ class View {
             const contentSize = documentElement.getBoundingClientRect()[side]
             const expandedSize = contentSize
             const { margin } = this.#layout
-            const padding = this.#vertical ? `0 ${margin}px` : `${margin}px 0`
+            // Add a generous bottom buffer (64px) in scrolled mode so fixed bottom chrome never obscures the last lines of text
+            const padding = this.#vertical ? `0 ${margin + 64}px 0 ${margin}px` : `${margin}px 0 ${margin + 64}px 0`
             this.#element.style.padding = padding
             this.#iframe.style[side] = `${expandedSize}px`
             this.#element.style[side] = `${expandedSize}px`

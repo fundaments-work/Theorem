@@ -182,7 +182,6 @@ export function WindowTitlebar({
     const menuButtonRef = useRef<HTMLButtonElement>(null);
     const isMenuOpen = activePanel === 'menu';
 
-    const currentChapter = location?.tocItem?.label || location?.pageItem?.label;
     const isTauriRuntime = isTauri();
     const isMobileRuntime = isMobile();
     const showDesktopWindowControls = isTauriRuntime && !isMobileRuntime;
@@ -306,14 +305,14 @@ export function WindowTitlebar({
                         >
                             {metadata?.title || "Loading..."}
                         </h1>
-                        <div
-                            className="flex items-center gap-1.5 text-[10px] sm:text-[11px] truncate mt-0.5"
-                            style={{ color: 'var(--reader-fg, var(--color-text))', opacity: 0.8 }}
-                        >
-                            {currentChapter && <span className="truncate max-w-[130px] sm:max-w-[180px]">{currentChapter}</span>}
-                            {currentChapter && formatLocation() && <span className="opacity-40">•</span>}
-                            {formatLocation() && <span className="font-mono font-medium">{formatLocation()}</span>}
-                        </div>
+                        {formatLocation() && (
+                            <div
+                                className="text-[10px] sm:text-[11px] truncate font-mono font-medium mt-0.5"
+                                style={{ color: 'var(--reader-fg, var(--color-text))', opacity: 0.75 }}
+                            >
+                                {formatLocation()}
+                            </div>
+                        )}
                     </div>
                 </div>
 

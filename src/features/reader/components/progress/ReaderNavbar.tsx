@@ -258,39 +258,39 @@ export const ReaderNavbar = memo(function ReaderNavbar({
     return (
         <div
             className={cn(
-                "flex flex-col gap-1 px-3 py-1.5 sm:px-4",
+                "flex flex-col gap-0.5 px-3 py-1 sm:px-4",
                 "border-t border-[var(--color-border)] bg-[var(--color-surface)]",
                 className
             )}
             style={{
-                paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))",
+                paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))",
             }}
         >
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
                 <button
                     onClick={onToggleToc}
-                    className="flex items-center justify-center p-2 -ml-1 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors h-10 w-10"
+                    className="flex items-center justify-center p-1 -ml-1 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors h-7 w-7 rounded-md"
                     aria-label="Table of Contents"
                 >
-                    <List size={18} />
+                    <List size={16} />
                 </button>
 
                 {immersionMode ? (
-                    <div className="flex-1 flex items-center gap-2 min-w-0">
+                    <div className="flex-1 flex items-center gap-1.5 min-w-0">
                         <Headphones className={cn(
-                            'w-4 h-4 shrink-0 transition-colors',
+                            'w-3.5 h-3.5 shrink-0 transition-colors',
                             ttsState === 'playing' || ttsState === 'loading' ? 'text-[color:var(--color-accent)]' : 'text-[color:var(--color-text-muted)]'
                         )} />
                         {ttsState === 'loading' && (
                             <Spinner size="sm" tone="accent" label="Preparing text-to-speech" className="shrink-0" />
                         )}
                         {ttsState === 'playing' && (
-                            <div className="flex items-end gap-[2px] h-4 shrink-0">
+                            <div className="flex items-end gap-[2px] h-3.5 shrink-0">
                                 {[0, 1, 2].map((i) => (
                                     <div
                                         key={i}
-                                        className="w-[3px] rounded-full bg-[var(--color-accent)]"
+                                        className="w-[2.5px] rounded-full bg-[var(--color-accent)]"
                                         style={{
                                             animation: `tts-bar-bounce 0.6s ease-in-out ${i * 0.12}s infinite alternate`,
                                             height: `${50 + i * 25}%`,
@@ -306,21 +306,21 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                             {ttsState === 'playing' ? (
                                 <>
                                     <button onClick={onTtsPause}
-                                        className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--color-surface-muted)] text-[var(--color-text-primary)] hover:bg-[var(--color-overlay-subtle)] active:scale-90 transition-colors"
+                                        className="flex items-center justify-center w-7 h-7 rounded-full bg-[var(--color-surface-muted)] text-[var(--color-text-primary)] hover:bg-[var(--color-overlay-subtle)] active:scale-90 transition-colors"
                                         aria-label="Pause">
-                                        <Pause className="w-3.5 h-3.5 fill-current" />
+                                        <Pause className="w-3 h-3 fill-current" />
                                     </button>
                                     <button onClick={onTtsStop}
-                                        className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:bg-[var(--color-overlay-subtle)] hover:text-[var(--color-error)] active:scale-90 transition-colors"
+                                        className="flex items-center justify-center w-7 h-7 rounded-full bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)] hover:bg-[var(--color-overlay-subtle)] hover:text-[var(--color-error)] active:scale-90 transition-colors"
                                         aria-label="Stop">
-                                        <Square className="w-3.5 h-3.5 fill-current" />
+                                        <Square className="w-3 h-3 fill-current" />
                                     </button>
                                 </>
                             ) : (
                                 <button onClick={onTtsPlay} disabled={ttsState === 'loading'}
-                                    className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:bg-[var(--color-accent-hover)] active:scale-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="flex items-center justify-center w-7 h-7 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:bg-[var(--color-accent-hover)] active:scale-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                     aria-label="Play">
-                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                    <Play className="w-3 h-3 fill-current" />
                                 </button>
                             )}
                         </div>
@@ -328,7 +328,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                 ) : (
                     <div className="flex-1 flex items-center justify-between gap-1 text-[10px] sm:text-xs text-[var(--color-text-muted)] min-w-0">
                         <span
-                            className="truncate max-w-[50%]"
+                            className="truncate max-w-[55%]"
                             title={currentSectionLabel}
                         >
                             {currentSectionLabel}
@@ -337,7 +337,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                             {timeRemaining && (
                                 <span className="hidden sm:inline text-[var(--color-text-muted)]">{timeRemaining}</span>
                             )}
-                            <span className="font-medium text-[var(--color-text-primary)]">
+                            <span className="font-medium text-[var(--color-text-primary)] font-mono text-[11px] sm:text-xs">
                                 {progressText}
                             </span>
                         </div>
@@ -349,7 +349,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                 <div
                     ref={trackRef}
                     className={cn(
-                        "relative h-5 cursor-pointer select-none",
+                        "relative h-3.5 cursor-pointer select-none",
                         "flex items-center",
                         isDragging && "cursor-grabbing"
                     )}
@@ -360,7 +360,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                     onPointerLeave={handlePointerLeave}
                 >
                     
-                    <div className="absolute inset-x-0 h-1 bg-[var(--color-surface-variant)] overflow-hidden">
+                    <div className="absolute inset-x-0 h-[3px] bg-[var(--color-surface-variant)] overflow-hidden rounded-full">
                         
                         <div
                             className={cn(
@@ -376,9 +376,9 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                     <div
                         className={cn(
                             "absolute top-1/2 -translate-y-1/2 -translate-x-1/2",
-                            "w-3 h-3",
+                            "w-2.5 h-2.5 rounded-full",
                             "bg-[var(--color-accent)]",
-                            "border-2 border-[var(--color-surface)]",
+                            "border border-[var(--color-surface)] shadow-sm",
                             isDragging ? "scale-125" : "transition-transform",
                             "pointer-events-none"
                         )}
@@ -387,7 +387,7 @@ export const ReaderNavbar = memo(function ReaderNavbar({
 
                     {(hoverFraction !== null || isDragging) && tooltipPosition !== null && (
                         <div
-                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-0.5 h-3 bg-[var(--color-accent)]/50 pointer-events-none"
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-0.5 h-2.5 bg-[var(--color-accent)]/50 pointer-events-none"
                             style={{ left: `${tooltipPosition * 100}%` }}
                         />
                     )}
@@ -396,8 +396,8 @@ export const ReaderNavbar = memo(function ReaderNavbar({
                         <div
                             className={cn(
                                 "absolute bottom-full mb-2 -translate-x-1/2",
-                                "px-2 py-1.5",
-                                "bg-[var(--color-surface)] border border-[var(--color-border)]",
+                                "px-2 py-1",
+                                "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-md",
                                 "text-xs",
                                 "pointer-events-none z-50",
                                 "whitespace-nowrap"
