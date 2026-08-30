@@ -50,13 +50,13 @@ function getThemeStyles(theme: CardTheme, accent?: HighlightColor) {
     const tintBg = accent ? HIGHLIGHT_SOLID_COLORS[accent] : "#2d6a6e";
     switch (theme) {
         case "dark":
-            return { bg: "#141416", fg: "#e8e6e1", accent: "#6bcdd1" };
+            return { bg: "#131418", fg: "#f3f0e8", accent: "#4fd1c5", cardBg: "rgba(255,255,255,0.06)", border: "rgba(255,255,255,0.1)" };
         case "tinted":
-            return { bg: tintBg, fg: "#ffffff", accent: "#ffffff" };
+            return { bg: tintBg, fg: "#ffffff", accent: "#ffffff", cardBg: "rgba(255,255,255,0.15)", border: "rgba(255,255,255,0.2)" };
         case "sepia":
-            return { bg: "#f4ecd8", fg: "#3d3025", accent: "#3d3025" };
+            return { bg: "#f6ede0", fg: "#38291a", accent: "#8c532b", cardBg: "rgba(56,41,26,0.06)", border: "rgba(56,41,26,0.1)" };
         default:
-            return { bg: "var(--color-background, #faf9f7)", fg: "var(--color-text-primary, #1c1c1c)", accent: "var(--color-accent, #2d6a6e)" };
+            return { bg: "#faf8f5", fg: "#18181b", accent: "#0f766e", cardBg: "rgba(0,0,0,0.04)", border: "rgba(0,0,0,0.08)" };
     }
 }
 
@@ -69,16 +69,16 @@ export function ShareCard({ kind, annotation, book, statsData, format, theme, sh
     const charCount = text.length;
 
     const quoteFontSize = useMemo(() => {
-        if (!text) return 40;
+        if (!text) return 52;
         const isStory = format === "story";
-        const maxWidth = 1080 - 128;
-        const avgCharWidth = 0.6;
-        const charsPerLine = Math.floor(maxWidth / (avgCharWidth * 40));
+        const maxWidth = 1080 - 160;
+        const avgCharWidth = 0.55;
+        const charsPerLine = Math.floor(maxWidth / (avgCharWidth * 48));
         const noteLines = (showNote && annotation?.noteContent) ? 4 : 0;
-        const availableLines = isStory ? 22 - noteLines : 11 - noteLines;
+        const availableLines = isStory ? 20 - noteLines : 10 - noteLines;
         const maxChars = charsPerLine * availableLines;
-        const minSize = 24;
-        const maxSize = isStory ? 48 : 44;
+        const minSize = 32;
+        const maxSize = isStory ? 60 : 54;
 
         if (charCount <= 0) return maxSize;
         const ratio = Math.min(1, maxChars / Math.max(1, charCount));
@@ -91,15 +91,22 @@ export function ShareCard({ kind, annotation, book, statsData, format, theme, sh
         : null;
 
     const cardContent = kind === "annotation" && annotation ? (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "EB Garamond, Georgia, serif", padding: "56px 64px" }}>
-            <div style={{ color: colors.accent, fontSize: 36, lineHeight: 1, marginBottom: 24, userSelect: "none" }}>
+        <div style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            fontFamily: "EB Garamond, Georgia, serif",
+            padding: isStory ? "120px 88px" : "88px 88px",
+            boxSizing: "border-box",
+        }}>
+            <div style={{ color: colors.accent, fontSize: 56, lineHeight: 1, marginBottom: 32, userSelect: "none" }}>
                 &#10033;
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 {annotation.selectedText && (
                     <div style={{
                         fontSize: quoteFontSize,
-                        lineHeight: 1.45,
+                        lineHeight: 1.5,
                         color: colors.fg,
                         textAlign: "justify",
                         textJustify: "inter-word",
@@ -110,13 +117,13 @@ export function ShareCard({ kind, annotation, book, statsData, format, theme, sh
                 )}
                 {showNote && annotation.noteContent && (
                     <div style={{
-                        marginTop: annotation.selectedText ? 28 : 0,
-                        paddingTop: annotation.selectedText ? 24 : 0,
-                        borderTop: `1px solid ${colors.fg}20`,
-                        fontSize: 17,
-                        lineHeight: 1.55,
+                        marginTop: annotation.selectedText ? 44 : 0,
+                        paddingTop: annotation.selectedText ? 32 : 0,
+                        borderTop: `1px solid ${colors.border}`,
+                        fontSize: 26,
+                        lineHeight: 1.6,
                         color: colors.fg,
-                        opacity: 0.7,
+                        opacity: 0.8,
                         fontFamily: "system-ui, -apple-system, sans-serif",
                     }}>
                         {annotation.noteContent}
@@ -124,96 +131,193 @@ export function ShareCard({ kind, annotation, book, statsData, format, theme, sh
                 )}
             </div>
             <div style={{
-                marginTop: 32,
-                paddingTop: 20,
-                borderTop: `1px solid ${colors.fg}20`,
+                marginTop: 48,
+                paddingTop: 28,
+                borderTop: `1px solid ${colors.border}`,
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
                 fontFamily: "system-ui, -apple-system, sans-serif",
             }}>
-                <div style={{ fontSize: 15, fontWeight: 500, color: colors.fg, lineHeight: 1.4 }}>
-                    {book?.title || "Untitled"}
-                </div>
-                {formattedDate && (
-                    <div style={{ fontSize: 12, color: colors.fg, opacity: 0.55, marginTop: 4, lineHeight: 1.4 }}>
-                        {formattedDate}
+                <div>
+                    <div style={{ fontSize: 26, fontWeight: 600, color: colors.fg, lineHeight: 1.3 }}>
+                        {book?.title || "Untitled"}
                     </div>
-                )}
+                    {book?.author && (
+                        <div style={{ fontSize: 20, color: colors.fg, opacity: 0.7, marginTop: 6, lineHeight: 1.3 }}>
+                            {book.author}
+                        </div>
+                    )}
+                    {formattedDate && (
+                        <div style={{ fontSize: 18, color: colors.fg, opacity: 0.5, marginTop: 6, lineHeight: 1.3 }}>
+                            {formattedDate}
+                        </div>
+                    )}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: colors.fg, opacity: 0.35, letterSpacing: "0.2em", textTransform: "uppercase" }}>
+                    Theorem
+                </div>
             </div>
         </div>
     ) : statsData ? (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "system-ui, -apple-system, sans-serif", padding: isStory ? "40px 44px" : "48px 56px", position: "relative" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: isStory ? 120 : 100, background: colors.accent, opacity: 0.06 }} />
+        <div style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+            padding: isStory ? "108px 84px" : "80px 84px",
+            position: "relative",
+            boxSizing: "border-box",
+            justifyContent: "space-between",
+        }}>
+            {/* Header */}
+            <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isStory ? 36 : 28 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", background: colors.accent }} />
+                        <span style={{ fontSize: 18, fontWeight: 700, color: colors.accent, textTransform: "uppercase", letterSpacing: "0.2em" }}>
+                            Reading Stats
+                        </span>
+                    </div>
+                    <span style={{ fontSize: 18, color: colors.fg, opacity: 0.5, fontWeight: 500 }}>
+                        {new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                    </span>
+                </div>
 
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: isStory ? 8 : 12, position: "relative" }}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: colors.accent, textTransform: "uppercase", letterSpacing: "0.15em" }}>Reading</span>
-                <span style={{ fontSize: 10, color: colors.fg, opacity: 0.3 }}>{new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                {/* Hero Stat: Total Reading Time */}
+                <div style={{ marginBottom: isStory ? 48 : 36 }}>
+                    <div style={{
+                        fontSize: isStory ? 104 : 92,
+                        fontWeight: 800,
+                        color: colors.fg,
+                        letterSpacing: "-0.04em",
+                        lineHeight: 1,
+                        marginBottom: 10,
+                    }}>
+                        {statsData.totalReadingTime > 0 ? formatTime(statsData.totalReadingTime) : "0m"}
+                    </div>
+                    <div style={{ fontSize: 22, color: colors.fg, opacity: 0.55, fontWeight: 500 }}>
+                        Total time spent reading
+                    </div>
+                </div>
+
+                {/* 3 Metric Cards Grid */}
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gap: 16,
+                    padding: "28px 24px",
+                    background: colors.cardBg,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 20,
+                    marginBottom: isStory ? 40 : 32,
+                }}>
+                    <div>
+                        <div style={{ fontSize: 44, fontWeight: 700, color: colors.fg, lineHeight: 1.1 }}>
+                            {statsData.completedBooks}
+                        </div>
+                        <div style={{ fontSize: 18, color: colors.fg, opacity: 0.6, marginTop: 6, fontWeight: 500 }}>
+                            Books Read
+                        </div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 44, fontWeight: 700, color: colors.accent, lineHeight: 1.1 }}>
+                            {statsData.currentStreak}d
+                        </div>
+                        <div style={{ fontSize: 18, color: colors.fg, opacity: 0.6, marginTop: 6, fontWeight: 500 }}>
+                            Current Streak
+                        </div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 44, fontWeight: 700, color: colors.fg, lineHeight: 1.1 }}>
+                            {statsData.booksReadThisYear}/{statsData.yearlyBookGoal}
+                        </div>
+                        <div style={{ fontSize: 18, color: colors.fg, opacity: 0.6, marginTop: 6, fontWeight: 500 }}>
+                            Yearly Goal
+                        </div>
+                    </div>
+                </div>
+
+                {/* Best Streak & Highlights */}
+                {statsData.longestStreak > 0 && (
+                    <div style={{ marginBottom: isStory ? 36 : 28 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 19, color: colors.fg, opacity: 0.7, marginBottom: 12, fontWeight: 500 }}>
+                            <span>Best Streak: <strong style={{ color: colors.accent, fontWeight: 700 }}>{statsData.longestStreak} days</strong></span>
+                            <span>{statsData.totalHighlights} highlights taken</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                            {Array.from({ length: Math.min(statsData.currentStreak, 24) }).map((_, i) => (
+                                <div
+                                    key={i}
+                                    style={{
+                                        width: 16,
+                                        height: 16,
+                                        borderRadius: "50%",
+                                        background: colors.accent,
+                                        opacity: 0.35 + (i / Math.min(statsData.currentStreak, 24)) * 0.65,
+                                    }}
+                                />
+                            ))}
+                            {statsData.currentStreak > 24 && (
+                                <span style={{ fontSize: 16, color: colors.fg, opacity: 0.5, marginLeft: 4, fontWeight: 600 }}>
+                                    +{statsData.currentStreak - 24}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Yearly Goal Progress Bar */}
+                {statsData.yearlyBookGoal > 0 && (
+                    <div style={{ marginBottom: isStory ? 36 : 28 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, color: colors.fg, opacity: 0.7, marginBottom: 10, fontWeight: 500 }}>
+                            <span>Yearly Reading Challenge</span>
+                            <span>{Math.round((statsData.booksReadThisYear / Math.max(1, statsData.yearlyBookGoal)) * 100)}%</span>
+                        </div>
+                        <div style={{ height: 12, background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 6, overflow: "hidden" }}>
+                            <div
+                                style={{
+                                    height: "100%",
+                                    width: `${Math.min(100, (statsData.booksReadThisYear / Math.max(1, statsData.yearlyBookGoal)) * 100)}%`,
+                                    background: colors.accent,
+                                    borderRadius: 6,
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
-            <div style={{ fontSize: isStory ? 56 : 64, fontWeight: 700, color: colors.fg, letterSpacing: "-0.04em", lineHeight: 1, marginBottom: 4, position: "relative" }}>
-                {statsData.totalReadingTime > 0 ? formatTime(statsData.totalReadingTime) : "0m"}
-            </div>
-            <div style={{ fontSize: 13, color: colors.fg, opacity: 0.4, marginBottom: isStory ? 28 : 36, position: "relative" }}>
-                Total reading time
-            </div>
-
-            <div style={{ display: "flex", gap: isStory ? 16 : 24, marginBottom: isStory ? 20 : 28, position: "relative" }}>
-                <div>
-                    <div style={{ fontSize: isStory ? 26 : 30, fontWeight: 600, color: colors.fg, lineHeight: 1.1 }}>{statsData.completedBooks}</div>
-                    <div style={{ fontSize: 11, color: colors.fg, opacity: 0.4, marginTop: 2 }}>Books</div>
-                </div>
-                <div style={{ width: 1, background: `${colors.fg}15` }} />
-                <div>
-                    <div style={{ fontSize: isStory ? 26 : 30, fontWeight: 600, color: colors.fg, lineHeight: 1.1 }}>{statsData.currentStreak}d</div>
-                    <div style={{ fontSize: 11, color: colors.fg, opacity: 0.4, marginTop: 2 }}>Streak</div>
-                </div>
-                <div style={{ width: 1, background: `${colors.fg}15` }} />
-                <div>
-                    <div style={{ fontSize: isStory ? 26 : 30, fontWeight: 600, color: colors.fg, lineHeight: 1.1 }}>{statsData.booksReadThisYear}/{statsData.yearlyBookGoal}</div>
-                    <div style={{ fontSize: 11, color: colors.fg, opacity: 0.4, marginTop: 2 }}>Year</div>
-                </div>
-            </div>
-
-            {statsData.longestStreak > 0 && (
-                <div style={{ marginBottom: isStory ? 16 : 20, position: "relative" }}>
-                    <div style={{ fontSize: 11, color: colors.fg, opacity: 0.35, marginBottom: 6 }}>
-                        Best streak <span style={{ fontWeight: 600, color: colors.accent }}>{statsData.longestStreak}d</span> · {statsData.totalHighlights} highlights
+            {/* Footer */}
+            <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingTop: 24,
+                borderTop: `1px solid ${colors.border}`,
+            }}>
+                {statsData.recentlyReading ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: 1, paddingRight: 16 }}>
+                        <div style={{ width: 4, height: 36, background: colors.accent, borderRadius: 2, flexShrink: 0 }} />
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 14, color: colors.fg, opacity: 0.5, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+                                Currently Reading
+                            </div>
+                            <div style={{ fontSize: 20, color: colors.fg, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {statsData.recentlyReading.title}
+                            </div>
+                        </div>
                     </div>
-                    <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-                        {Array.from({ length: Math.min(statsData.currentStreak, 30) }).map((_, i) => (
-                            <div key={i} style={{ width: Math.max(4, isStory ? 6 : 8), height: Math.max(4, isStory ? 6 : 8), borderRadius: "50%", background: colors.accent, opacity: 0.3 + (i / Math.min(statsData.currentStreak, 30)) * 0.7 }} />
-                        ))}
-                        {statsData.currentStreak > 30 && <span style={{ fontSize: 10, color: colors.fg, opacity: 0.3, marginLeft: 4 }}>+{statsData.currentStreak - 30}</span>}
-                    </div>
+                ) : <div />}
+                <div style={{ fontSize: 18, fontWeight: 700, color: colors.fg, opacity: 0.35, letterSpacing: "0.25em", textTransform: "uppercase", flexShrink: 0 }}>
+                    Theorem
                 </div>
-            )}
-
-            {statsData.yearlyBookGoal > 0 && (
-                <div style={{ marginBottom: isStory ? 16 : 20, position: "relative" }}>
-                    <div style={{ height: 4, background: `${colors.fg}10`, borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.min(100, (statsData.booksReadThisYear / Math.max(1, statsData.yearlyBookGoal)) * 100)}%`, background: colors.accent, borderRadius: 2 }} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: colors.fg, opacity: 0.35, marginTop: 4 }}>
-                        <span>{statsData.booksReadThisYear} of {statsData.yearlyBookGoal} books this year</span>
-                    </div>
-                </div>
-            )}
-
-            {statsData.recentlyReading && (
-                <div style={{ marginTop: "auto", paddingTop: 14, borderTop: `1px solid ${colors.fg}10`, display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
-                    <div style={{ width: 3, height: 28, background: colors.accent, borderRadius: 2, flexShrink: 0 }} />
-                    <div style={{ fontSize: 12, color: colors.fg, opacity: 0.5 }}>
-                        <span style={{ opacity: 1, color: colors.fg }}>{statsData.recentlyReading.title}</span>
-                    </div>
-                </div>
-            )}
-
-            <div style={{ position: "absolute", bottom: isStory ? 28 : 32, right: isStory ? 32 : 36, fontSize: 10, color: colors.fg, opacity: 0.2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                Theorem
             </div>
         </div>
     ) : null;
 
     return (
-        <div style={{ width: CARD_WIDTH_PX, height, background: colors.bg, overflow: "hidden", position: "relative" }}>
+        <div style={{ width: CARD_WIDTH_PX, height, background: colors.bg, overflow: "hidden", position: "relative", boxSizing: "border-box" }}>
             {cardContent}
         </div>
     );
