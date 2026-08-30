@@ -75,7 +75,7 @@ See [AGENTS.md](./AGENTS.md) for the full repository map, conventions, and archi
 ## Features
 
 ### Multi-Format Reader
-EPUB, MOBI, AZW, AZW3, FB2, CBZ, CBR, PDF, TXT, and RSS articles. Foliate-based reflowable rendering with paged and scroll modes. PDF.js engine with zoom (50–200%), page-fit/width-fit modes, and outline navigation. In-place footnote and citation popovers without losing your place. Full table of contents with section progress. Estimated reading time per page and chapter. Reading progress saved per-book across sessions (page-accurate + CFI). File association — open ebooks directly from your file manager.
+EPUB, MOBI, AZW, AZW3, FB2, CBZ, CBR, PDF, TXT, and RSS articles. Foliate-based reflowable rendering with paged and scroll modes. PDF.js engine with zoom (50–200%), page-fit/width-fit modes, and outline navigation. **Theorem Lens** (in-place footnote, citation, and figure peek portals without losing your reading place). Full table of contents with section progress. Estimated reading time per page and chapter. Reading progress saved per-book across sessions (page-accurate + CFI). File association — open ebooks directly from your file manager.
 
 <p align="center">
   <img src="./Screenshots/reader_screen.png" alt="Theorem reader with highlights and annotations in dark theme" width="700">

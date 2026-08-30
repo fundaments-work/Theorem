@@ -20,8 +20,9 @@ pnpm dev:tauri    # desktop (full experience)
 
 | Document | Feature |
 |----------|---------|
-| [reader.md](reader.md) | EPUB/MOBI/PDF/CBR reading, annotations, search |
+| [reader.md](reader.md) | EPUB/MOBI/PDF/CBR reading, Theorem Lens, search |
 | [library.md](library.md) | Book import, organization, search, virtual scrolling |
+| [discover.md](discover.md) | OPDS 1.2 catalog browser & public domain storefront |
 | [sync.md](sync.md) | P2P device sync via iroh |
 | [annotations.md](annotations.md) | Highlights, notes, bookmarks |
 | [vocabulary.md](vocabulary.md) | Dictionary lookups, StarDict |
@@ -32,10 +33,12 @@ pnpm dev:tauri    # desktop (full experience)
 | [tts.md](tts.md) | Text-to-speech (immersion reading) |
 | [persistence.md](persistence.md) | SQLite schema, Zustand stores, data lifecycle |
 
-## Reference
+## Reference & Strategy
 
 | Document | What it covers |
 |----------|----------------|
+| [COMPETITIVE_STRATEGY_BLUEPRINT.md](COMPETITIVE_STRATEGY_BLUEPRINT.md) | Master market & open-source competitive strategy |
 | [epub-preparser.md](epub-preparser.md) | Rust EPUB ZIP pre-parser |
 | [keyboard-shortcuts.md](keyboard-shortcuts.md) | All keyboard shortcuts |
 | [onboarding.md](onboarding.md) | First-run flow |
+| [plans/](plans/) | Technical design plans & roadmaps |

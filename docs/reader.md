@@ -46,21 +46,34 @@ Reader.tsx
 
 **Zoom:** Applied to the iframe document before column calculation. `applyZoomToDocument()` runs inside the `load` event handler, before `beforeRender()` and `columnize()`. After navigation, `applyZoomSync()` re-applies zoom as a safety net (harmless redundancy).
 
-## PDF Rendering Path
+## Theorem Lens (Footnote & Citation Peek Portals)
+
+When reading reflowable EPUBs or academic documents, tapping a footnote reference (e.g. `[1]`, `[Note 4]`, `<aside epub:type="footnote">`, `role="doc-noteref"`) activates **Theorem Lens** (`FootnotePopover.tsx`):
+* **In-Place Popover**: Instead of jumping to the back of the book, a floating lens balloon anchors directly above or below the tapped reference.
+* **Rich HTML & Media Rendering**: Displays formatted citation text, author commentary, and embedded diagram images.
+* **Quick Actions**: Copy text, jump directly to the notes section (`[Jump ↗]`), or dismiss effortlessly by scrolling or tapping away.
+
+## PDF Rendering & Memory Architecture
 
 ```
 Reader.tsx
   └─ PDFReader (lazy)
        └─ PDFJsEngine (forwardRef + memo)
             └─ pdfjs-dist
-                 ├─ canvas rendering (each page)
-                 ├─ text layer (selectable text)
-                 └─ annotation layer (highlights, drawings)
+                 ├─ Canvas rendering (on-demand viewport window)
+                 ├─ Text layer (selectable text & search)
+                 └─ Annotation layer (highlights, drawings)
 ```
 
-PDF.js is prewarmed on app start via `prewarmPdfJsRuntime()` from `src/core/lib/pdfjs-runtime.ts`. The `pdfjs-dist` package is chunked separately via Vite's `manualChunks` (`build.rolldownOptions.output.manualChunks`).
-
-PDF reading uses range-based reads for large files — `read_pdf_range(path, offset, length)` reads only the bytes needed for the current page(s), not the entire file.
+PDF.js is prewarmed on app start via `prewarmPdfJsRuntime()`. To prevent memory bloat on large documents:
+1. **Thread Worker Lifecycle**: `PDFDocumentLoadingTask` worker instance is retained and explicitly destroyed via `loadingTask.destroy()` on reader unmount and book change.
+2. **On-Demand Page Streaming**: `disableAutoFetch: true` and `disableStream: true` ensure the worker only fetches byte ranges for visible pages.
+3. **GPU Canvas Backing Store Reclamation**: Whenever a page leaves the viewport window, `canvas.width = 0; canvas.height = 0;` is executed immediately, freeing GPU framebuffer memory in Skia/Direct2D/Metal.
+4. **Operator List Garbage Collection**: `page.cleanup()` is invoked on non-visible page proxies to release deserialized vector operators and image bitmaps.
+5. **Presentation Modes**:
+   - **Continuous (`scroll`)**: Virtualized DOM window with automatic layout measurement and smooth anchor restoration.
+   - **Single Page (`paged`)**: Auto-fits page to screen (`page-fit`), centers using `m-auto` layout to prevent flex data-loss clipping, and keeps adjacent pages (`page - 1`, `page + 1`) pre-loaded for 0ms instant page turns.
+6. **Settings Persistence**: Zoom level, zoom mode, and presentation mode are saved per-book in `PdfViewState` within SQLite.
 
 ## Annotations
 
@@ -89,4 +102,5 @@ Platform-specific TTS commands in Rust:
 - **Windows**: PowerShell `System.Speech`
 - **Android**: Native TTS plugin
 
-The Rust commands are synchronous shell commands, but the JS side (`ImmersionPlayer.ts`) manages playback state, highlighting the currently spoken word in the reader viewport.
+The Rust commands are synchronous shell commands, but the JS side (`ImmersionPlayer.ts`) manages playback state, highlighting the currently spoken word in the reader viewport. Companion audiobook tracks (`.m4b`/`.mp3`) upgrade this player into a human-narrated player with speed controls.
+

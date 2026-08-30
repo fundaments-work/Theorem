@@ -5,30 +5,32 @@
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+1` | Go to Library |
-| `Ctrl+2` | Go to Vocabulary |
-| `Ctrl+3` | Go to Shelves |
-| `Ctrl+4` | Go to Annotations |
-| `Ctrl+5` | Go to Bookmarks |
-| `Ctrl+6` | Go to Settings |
-| `Ctrl+7` | Go to Feeds |
-| `Shift+?` | Show shortcuts help |
-| `Ctrl+F` | Focus search (context-dependent) |
-| `Escape` | Close panels / dialogs |
+| `Ctrl+2` | Go to Shelves |
+| `Ctrl+3` | Go to Feeds |
+| `Ctrl+4` | Go to Workbench (Annotations & Vocab) |
+| `Ctrl+5` | Go to Statistics |
+| `Ctrl+7` | Go to Bookmarks |
+| `Ctrl+,` | Go to Settings |
+| `Ctrl+F` | Focus search bar |
+| `Ctrl+B` | Toggle sidebar |
+| `Ctrl+A` | Select all (Library/Shelves/Bookmarks) |
+| `Shift+?` | Show shortcuts help modal |
+| `Escape` | Close panels / popovers / dialogs |
 
 ## Reader
 
 | Shortcut | Action |
 |----------|--------|
 | `Left` / `Right` | Previous / Next page |
-| `Space` | Next page (scroll/paged) |
+| `Space` | Next page |
 | `+` / `-` | Zoom in / Zoom out |
+| `Ctrl+F` | Find in book |
+| `Ctrl+D` | Bookmark current page |
+| `Ctrl+T` | Toggle table of contents |
+| `Ctrl+S` | Open reader settings |
+| `Ctrl+A` | Open annotations panel |
 | `F` | Toggle fullscreen |
-| `T` | Toggle table of contents |
-| `S` | Focus search |
-| `A` | Toggle annotations panel |
-| `B` | Toggle bookmarks panel |
-| `R` | Start/stop TTS (immersion reading) |
-| `Escape` | Exit fullscreen / close settings |
+| `Escape` | Exit fullscreen / close Theorem Lens / close panels |
 
 ## Library
 

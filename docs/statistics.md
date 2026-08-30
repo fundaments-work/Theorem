@@ -36,7 +36,7 @@ For performance, only the last 365 days are stored. Older entries are pruned on 
 
 Two goals are user-configurable in Settings:
 - **Daily minutes**: Target minutes per day (default: 30)
-- **Yearly books**: Target books per year (default: 12)
+- **Yearly books**: Target books per year (default: 24)
 
 Progress bars show completion percentage for both.
 

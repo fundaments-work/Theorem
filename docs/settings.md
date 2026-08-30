@@ -67,6 +67,7 @@ Key migrations in history:
 - **v5→v6**: Added vault integration settings
 - **v7→v8**: Folded reading stats into settings store
 - **v8→v9**: Added accent color and language
+- **v9→v10**: Added goal notifications, reminder times, and sync notification toggles
 
 When adding a new setting, the current version should be bumped and a migration written. Old migrations should not be removed — they may be needed if a user upgrades from a very old version.
 

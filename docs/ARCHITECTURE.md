@@ -15,14 +15,14 @@
 │  └──────────┘                    └──────┬──────┘      │
 └────────────────────────────────────────┼─────────────┘
                                          │
-              ┌──────────────────────────┼──────────────────────────┐
-              │         Features         │                          │
-         ┌────┴─────┐ ┌──────┴──────┐ ┌──┴───┐ ┌────────────────┐  │
-         │  Reader   │ │  Library    │ │Feeds │ │ Vocabulary     │  │
-         │  (2 engs) │ │  (virtual) │ │      │ │ (StarDict)     │  │
-         └──────────┘ └─────────────┘ └──────┘ └────────────────┘  │
-              │                                                    │
-         ┌────┴────────────────────────────────────────────────────┘
+              ┌──────────────────────────┼──────────────────────────────────────┐
+              │         Features         │                                      │
+         ┌────┴─────┐ ┌──────┴──────┐ ┌──┴───────┐ ┌────────────┐ ┌───────────┐ │
+         │  Reader   │ │  Library    │ │ Discover│ │ Feeds      │ │ Vocabulary│ │
+         │ (2 engs)  │ │ (virtual)   │ │ (OPDS)  │ │ (RSS/Atom) │ │ (StarDict)│ │
+         └──────────┘ └─────────────┘ └──────────┘ └────────────┘ └───────────┘ │
+              │                                                                 │
+         ┌────┴─────────────────────────────────────────────────────────────────┘
          │
     ┌────┴────┐
     │  Core    │
@@ -125,10 +125,10 @@ Reader.tsx
 
 ## State Architecture
 
-All state lives in 5 Zustand stores. Each store is persisted to SQLite via Tauri commands (`sqlite_set_kv` / `sqlite_get_kv` from `database.rs`).
+All state lives in 6 Zustand stores. Each persisted store saves to SQLite via Tauri commands (`sqlite_set_kv` / `sqlite_get_kv` from `database.rs`).
 
 ```
-uiStore (ephemeral)
+uiStore (ephemeral, version 1)
   ├─ currentRoute, currentBookId
   ├─ sidebarOpen, searchQuery
   ├─ vaultSyncStatus, deviceSyncStatus
@@ -140,7 +140,7 @@ libraryStore (persisted, version 6)
   ├─ collections: Collection[]
   └─ deletionTombstones: DeletionTombstone[]
 
-settingsStore (persisted, version 9)
+settingsStore (persisted, version 10)
   ├─ settings: AppSettings
   ├─ stats: ReadingStats
   └─ settingsLastModifiedAt: string
@@ -152,6 +152,11 @@ vocabularyStore (persisted, version 5)
 rssStore (persisted, version 1)
   ├─ feeds: RssFeed[]
   └─ articles: RssArticle[]
+
+opdsStore (persisted, version 2)
+  ├─ customFeeds: OPDSFeedConfig[]
+  ├─ activeFeedUrl: string | null
+  └─ cachedFeeds: Record<string, OPDSCatalog>
 ```
 
 **Non-persisted data lives in SQLite directly:**
