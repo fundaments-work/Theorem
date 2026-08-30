@@ -90,6 +90,7 @@ interface RssStore {
     closeArticleViewer: () => void;
     setCurrentArticle: (article: RssArticle | null) => void;
     updateArticleContent: (articleId: string, fullContent: string) => void;
+    updateArticleProgress: (articleId: string, progress: number) => void;
     fetchFullArticle: (articleId: string) => Promise<string | null>;
     setError: (error?: string) => void;
 }
@@ -285,9 +286,8 @@ export const useRssStore = create<RssStore>()(
             },
 
             openArticleInReader: (article: RssArticle) => {
-                get().markArticleRead(article.id);
-
-                set({ currentArticle: article });
+                const fresh = get().articles.find(a => a.id === article.id) || article;
+                set({ currentArticle: fresh });
                 useUIStore.getState().setRoute('reader');
             },
 
@@ -315,6 +315,30 @@ export const useRssStore = create<RssStore>()(
                     ),
                     currentArticle: state.currentArticle?.id === articleId
                         ? { ...state.currentArticle, fullContent, contentSource: 'extracted' }
+                        : state.currentArticle,
+                }));
+                scheduleMutationSync();
+            },
+
+            updateArticleProgress: (articleId: string, progress: number) => {
+                const safeProgress = Math.max(0, Math.min(1, progress));
+                const isCompleted = safeProgress >= 0.95;
+                set(state => ({
+                    articles: state.articles.map(a =>
+                        a.id === articleId
+                            ? {
+                                ...a,
+                                progress: safeProgress,
+                                isRead: isCompleted ? true : a.isRead,
+                            }
+                            : a
+                    ),
+                    currentArticle: state.currentArticle?.id === articleId
+                        ? {
+                            ...state.currentArticle,
+                            progress: safeProgress,
+                            isRead: isCompleted ? true : state.currentArticle.isRead,
+                        }
                         : state.currentArticle,
                 }));
                 scheduleMutationSync();

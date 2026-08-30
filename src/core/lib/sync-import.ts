@@ -402,15 +402,16 @@ export function mergeRssArticles(
     tombstones: DeletionTombstone[] = [],
 ): RssArticle[] {
     const deletedFeedIds = tombstoneIdSet(tombstones, "feed");
+    const deletedArticleIds = tombstoneIdSet(tombstones, "rss_article");
     const byId = new Map<string, RssArticle>();
 
     for (const article of existing) {
-        if (deletedFeedIds.has(article.feedId)) continue;
+        if (deletedFeedIds.has(article.feedId) || deletedArticleIds.has(article.id)) continue;
         byId.set(article.id, article);
     }
 
     for (const inc of incoming) {
-        
+        if (deletedArticleIds.has(inc.id)) continue;
         const remappedFeedId = feedIdMap?.get(inc.feedId) ?? inc.feedId;
         if (deletedFeedIds.has(remappedFeedId)) continue;
 
@@ -426,7 +427,9 @@ export function mergeRssArticles(
             ...match,
             isRead: match.isRead || remapped.isRead,
             isFavorite: match.isFavorite || remapped.isFavorite,
-            
+            progress: Math.max(match.progress || 0, remapped.progress || 0) || undefined,
+            fullContent: match.fullContent || remapped.fullContent,
+            contentSource: match.contentSource || remapped.contentSource,
             feedId: remappedFeedId,
         };
         byId.set(remapped.id, merged);

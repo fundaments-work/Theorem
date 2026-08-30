@@ -46,9 +46,13 @@ export class ArticleExtractorService {
      * Uses Tauri native Rust command on desktop/mobile to bypass CORS and rotate user-agents,
      * and falls back to standard browser fetch on web.
      */
-    static async fetchHtml(url: string, timeoutMs: number = 30000): Promise<string> {
+    static async fetchHtml(url: string, timeoutMs: number = 6000): Promise<string> {
         if (isTauri()) {
-            return await invoke<string>("fetch_url_content", { url });
+            const invokePromise = invoke<string>("fetch_url_content", { url });
+            const timeoutPromise = new Promise<string>((_, reject) => {
+                setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+            });
+            return await Promise.race([invokePromise, timeoutPromise]);
         }
 
         const controller = new AbortController();

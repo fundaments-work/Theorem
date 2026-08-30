@@ -1,7 +1,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { cn } from "../../core/lib/utils";
+import { cn, formatProgress } from "../../core/lib/utils";
 import { isTauri } from "../../core/lib/env";
 import { useRssStore } from "../../core/store";
 import type { RssFeed, RssArticle } from "../../core/types";
@@ -71,12 +71,16 @@ function FeedListItem({
     isSelected,
     onSelect,
     onDelete,
+    onRefresh,
+    isRefreshing,
     showTouchActions,
 }: {
     feed: RssFeed;
     isSelected: boolean;
     onSelect: () => void;
     onDelete: () => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
     showTouchActions: boolean;
 }) {
     
@@ -84,7 +88,7 @@ function FeedListItem({
         <div
             onClick={onSelect}
             className={cn(
-                "group relative flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors",
+                "group relative flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors",
                 isSelected
                     ? "bg-[var(--color-accent)]/10 text-[color:var(--color-accent)]"
                     : "hover:bg-[var(--color-surface-muted)] text-[color:var(--color-text-secondary)]",
@@ -129,6 +133,27 @@ function FeedListItem({
                 )}>
                     {feed.unreadCount}
                 </span>
+            )}
+
+            {onRefresh && (
+                <button
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onRefresh();
+                    }}
+                    disabled={isRefreshing}
+                    className={cn(
+                        "p-1.5 transition-colors flex-shrink-0",
+                        showTouchActions || isRefreshing
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                        "text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)]"
+                    )}
+                    title={`Refresh ${feed.title}`}
+                    aria-label={`Refresh ${feed.title}`}
+                >
+                    <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
+                </button>
             )}
 
             <button
@@ -239,7 +264,7 @@ function ArticleCard({
                     
                     <div className="flex-1 min-w-0">
                         
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                             {feedTitle && (
                                 <span className="text-[10px] uppercase font-bold tracking-wider text-[color:var(--color-accent)]">
                                     {feedTitle}
@@ -250,6 +275,22 @@ function ArticleCard({
                                     <span className="text-[color:var(--color-text-muted)] text-[10px]">•</span>
                                     <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] flex items-center gap-1 uppercase tracking-wide">
                                         {dateStr}
+                                    </span>
+                                </>
+                            )}
+                            {article.progress != null && article.progress > 0 && (
+                                <>
+                                    <span className="text-[color:var(--color-text-muted)] text-[10px]">•</span>
+                                    <span className="text-[10px] font-mono font-semibold text-[color:var(--color-accent)]">
+                                        {formatProgress(article.progress)} read
+                                    </span>
+                                </>
+                            )}
+                            {article.isRead && (!article.progress || article.progress >= 0.95) && (
+                                <>
+                                    <span className="text-[color:var(--color-text-muted)] text-[10px]">•</span>
+                                    <span className="text-[10px] font-medium text-[color:var(--color-text-muted)] uppercase tracking-wide">
+                                        Read
                                     </span>
                                 </>
                             )}
@@ -271,7 +312,16 @@ function ArticleCard({
                             />
                         )}
 
-                        <div className="flex items-center gap-2 mt-4">
+                        {article.progress != null && article.progress > 0 && article.progress < 0.95 && (
+                            <div className="w-full bg-[var(--color-surface-muted)] h-1 rounded-full overflow-hidden mt-3 max-w-xs">
+                                <div
+                                    className="bg-[var(--color-accent)] h-full transition-[width] duration-300"
+                                    style={{ width: `${Math.round(article.progress * 100)}%` }}
+                                />
+                            </div>
+                        )}
+
+                        <div className="flex items-center gap-2 mt-3">
                             {article.url && (
                                 <button
                                     type="button"
@@ -285,9 +335,11 @@ function ArticleCard({
                                             window.open(article.url, "_blank", "noopener,noreferrer");
                                         }
                                     }}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[color:var(--color-accent)] hover:bg-[var(--color-surface-muted)] transition-colors"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[var(--color-surface-muted)] rounded transition-colors"
+                                    title="Open original website in browser"
                                 >
-                                    <span>Read Full Article</span>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    <span>View Original</span>
                                 </button>
                             )}
                         </div>
@@ -364,6 +416,7 @@ export function FeedsPage() {
     const removeFeed = useRssStore((s) => s.removeFeed);
     const deleteArticle = useRssStore((s) => s.deleteArticle);
     const toggleArticleRead = useRssStore((s) => s.toggleArticleRead);
+    const refreshFeed = useRssStore((s) => s.refreshFeed);
     const refreshAll = useRssStore((s) => s.refreshAll);
     const getArticlesForFeed = useRssStore((s) => s.getArticlesForFeed);
     const getAllArticles = useRssStore((s) => s.getAllArticles);
@@ -378,7 +431,8 @@ export function FeedsPage() {
         return value && value.trim().length > 0 ? value : null;
     });
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [refreshingFeedIds, setRefreshingFeedIds] = useState<Set<string>>(() => new Set());
+    const [isRefreshingAll, setIsRefreshingAll] = useState(false);
 
     const [showMobileList, setShowMobileList] = useState(() => {
         if (typeof window === "undefined") {
@@ -497,11 +551,35 @@ export function FeedsPage() {
         setShowMobileList(false); 
     }, []);
 
-    const handleRefreshAll = useCallback(async () => {
-        setIsRefreshing(true);
-        await refreshAll();
-        setIsRefreshing(false);
-    }, [refreshAll]);
+    const handleRefreshFeed = useCallback(async (feedId: string) => {
+        setRefreshingFeedIds((prev) => {
+            const next = new Set(prev);
+            next.add(feedId);
+            return next;
+        });
+        try {
+            await refreshFeed(feedId);
+        } finally {
+            setRefreshingFeedIds((prev) => {
+                const next = new Set(prev);
+                next.delete(feedId);
+                return next;
+            });
+        }
+    }, [refreshFeed]);
+
+    const handleRefreshHeader = useCallback(async () => {
+        if (selectedFeedId) {
+            await handleRefreshFeed(selectedFeedId);
+        } else {
+            setIsRefreshingAll(true);
+            try {
+                await refreshAll();
+            } finally {
+                setIsRefreshingAll(false);
+            }
+        }
+    }, [selectedFeedId, handleRefreshFeed, refreshAll]);
 
     const handleDeleteFeed = useCallback((feedId: string) => {
         if (selectedFeedId === feedId) {
@@ -514,6 +592,10 @@ export function FeedsPage() {
     const handleBackToFeeds = () => {
         setShowMobileList(true);
     };
+
+    const isRefreshingCurrent = selectedFeedId
+        ? refreshingFeedIds.has(selectedFeedId)
+        : isRefreshingAll;
 
     if (feeds.length === 0 && !isLoading) {
         return (
@@ -603,6 +685,8 @@ export function FeedsPage() {
                                                 isSelected={selectedFeedId === row.feed.id}
                                                 onSelect={() => handleSelectFeed(row.feed.id)}
                                                 onDelete={() => handleDeleteFeed(row.feed.id)}
+                                                onRefresh={() => handleRefreshFeed(row.feed.id)}
+                                                isRefreshing={refreshingFeedIds.has(row.feed.id)}
                                                 showTouchActions={showTouchActions}
                                             />
                                         )}
@@ -644,15 +728,15 @@ export function FeedsPage() {
                     </div>
 
                     <button
-                        onClick={handleRefreshAll}
-                        disabled={isRefreshing || isLoading}
+                        onClick={handleRefreshHeader}
+                        disabled={isRefreshingCurrent || isLoading}
                         className={cn(
                             "ui-btn shrink-0",
                             "disabled:opacity-50",
                         )}
-                        title="Refresh feeds"
+                        title={selectedFeed ? `Refresh ${selectedFeed.title}` : "Refresh all feeds"}
                     >
-                        <RefreshCw className={cn("w-4 h-4", (isRefreshing || isLoading) && "animate-spin")} />
+                        <RefreshCw className={cn("w-4 h-4", (isRefreshingCurrent || isLoading) && "animate-spin")} />
                         <span className="hidden sm:inline">Refresh</span>
                     </button>
                 </header>

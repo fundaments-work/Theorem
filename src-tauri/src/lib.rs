@@ -510,12 +510,12 @@ fn fetch_url_content(url: String) -> Result<String, String> {
     let mut last_error: Option<String> = None;
     for (attempt, user_agent) in user_agents.iter().enumerate() {
         if attempt > 0 {
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            std::thread::sleep(std::time::Duration::from_millis(150));
         }
 
         let response = shared_http_client()
             .get(parsed_url.clone())
-            .timeout(std::time::Duration::from_secs(45))
+            .timeout(std::time::Duration::from_secs(8))
             .header("User-Agent", *user_agent)
             .header(
                 "Accept",

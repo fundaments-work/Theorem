@@ -291,25 +291,29 @@ const BookReaderPage = memo(function BookReaderPage() {
             return settings.readerSettings;
         }
 
+        const isArticle = !currentBookId && !!currentArticle;
+        const baseFlow = isArticle ? 'scroll' : settings.readerSettings.flow;
         const effectiveLayout = isMobileViewport ? 'single' : settings.readerSettings.layout;
         const effectiveZoom = clampReaderZoomByFlow(
             settings.readerSettings.zoom,
-            settings.readerSettings.flow,
+            baseFlow,
         );
 
         if (
-            effectiveLayout !== settings.readerSettings.layout
+            baseFlow !== settings.readerSettings.flow
+            || effectiveLayout !== settings.readerSettings.layout
             || effectiveZoom !== settings.readerSettings.zoom
         ) {
             return {
                 ...settings.readerSettings,
+                flow: baseFlow,
                 layout: effectiveLayout,
                 zoom: effectiveZoom,
             };
         }
 
         return settings.readerSettings;
-    }, [isMobileViewport, isPdfFormat, settings.readerSettings]);
+    }, [isMobileViewport, isPdfFormat, currentBookId, currentArticle, settings.readerSettings]);
 
     useEffect(() => {
         if (isPdfFormat || settings.readerSettings.flow !== 'paged') {
@@ -558,23 +562,27 @@ const BookReaderPage = memo(function BookReaderPage() {
                 try {
                     const feedTitle = feeds.find((feed) => feed.id === currentArticle.feedId)?.title;
                     const { convertArticleToEpubBlob } = await import("../../core/lib/rss-epub");
-                    const epubBlob = convertArticleToEpubBlob(currentArticle, feedTitle);
-                    if (!isCancelled) {
-                        setFile(epubBlob);
-                    }
 
-                    if (!currentArticle.fullContent && currentArticle.url) {
-                        const articleId = currentArticle.id;
-                        useRssStore.getState().fetchFullArticle(articleId).then((fullContent) => {
-                            if (!isCancelled && fullContent) {
-                                const active = useRssStore.getState().currentArticle;
-                                if (active && active.id === articleId) {
-                                    const updatedBlob = convertArticleToEpubBlob(active, feedTitle);
-                                    setFile(updatedBlob);
+                    let articleToRender = currentArticle;
+
+                    if (!articleToRender.fullContent && articleToRender.url) {
+                        try {
+                            const fullContent = await useRssStore.getState().fetchFullArticle(articleToRender.id);
+                            if (fullContent && !isCancelled) {
+                                const refreshed = useRssStore.getState().currentArticle;
+                                if (refreshed && refreshed.id === articleToRender.id) {
+                                    articleToRender = refreshed;
                                 }
                             }
-                        }).catch(() => {});
+                        } catch {
+                            // Fall back to summary
+                        }
                     }
+
+                    if (isCancelled) return;
+
+                    const epubBlob = convertArticleToEpubBlob(articleToRender, feedTitle);
+                    setFile(epubBlob);
                 } catch (err) {
                     if (!isCancelled) {
                         setLoadError(err instanceof Error ? err.message : 'Error preparing article');
@@ -959,9 +967,12 @@ const BookReaderPage = memo(function BookReaderPage() {
                 pageProgress,
             });
             lastClickFractionRef.current = null;
+        } else if (currentArticle) {
+            const safePercentage = Math.max(0, Math.min(1, loc.percentage || 0));
+            useRssStore.getState().updateArticleProgress(currentArticle.id, safePercentage);
         }
 
-    }, [currentBookId, scheduleProgressUpdate, updateProgress]);
+    }, [currentBookId, currentArticle, scheduleProgressUpdate, updateProgress]);
 
     useEffect(() => {
         if (isPdfFormat || !location?.cfi) return;
@@ -2366,16 +2377,6 @@ const BookReaderPage = memo(function BookReaderPage() {
 
             {!isPdfFormat && (
                 <>
-                    <button
-                        onClick={() => togglePanel('toc')}
-                        className={cn(
-                            "fixed bottom-6 left-6 z-40 p-3 bg-neutral-900/80 text-white rounded-full shadow-lg backdrop-blur-sm transition-transform duration-300",
-                            shouldShowReaderChrome ? "translate-y-0" : "translate-y-20 pointer-events-none"
-                        )}
-                        aria-label="Table of Contents"
-                    >
-                        <List className="w-5 h-5" />
-                    </button>
                     <SpeedReader
                         isOpen={speedReadMode}
                         text={speedReadText}

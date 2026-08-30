@@ -489,36 +489,60 @@ export class FoliateEngine {
                 }
             }
             
-            const pageInfo = detail.location ? {
-                currentPage: detail.location.current + 1,
-                endPage: detail.location.next + 1,
-                totalPages: detail.location.total,
-                range:
-                    detail.location.current !== detail.location.next
-                        ? `${detail.location.current + 1}-${detail.location.next + 1}`
-                        : `${detail.location.current + 1}`,
-                isEstimated: true,
-            } : undefined;
+            const renderer = this.view?.renderer as any;
+            const isPaginator = renderer && typeof renderer.page === 'number' && typeof renderer.pages === 'number' && !renderer.scrolled;
+            const isSingleSection = !detail.section || detail.section.total <= 1;
+            const isAtEnd = !!(renderer?.atEnd || (isPaginator && isSingleSection && renderer.page >= (renderer.pages > 2 ? renderer.pages - 2 : renderer.pages)));
 
-            const rawFraction = detail.fraction;
-            let fraction = typeof rawFraction === 'number' && isFinite(rawFraction)
-                ? Math.max(0, Math.min(1, rawFraction))
-                : NaN;
-            if (!isFinite(fraction)) {
-                if (pageInfo && pageInfo.totalPages > 1) {
-                    fraction = Math.max(
-                        0,
-                        Math.min(1, (pageInfo.currentPage - 1) / (pageInfo.totalPages - 1)),
-                    );
-                } else if (
-                    typeof detail.section?.current === 'number'
-                    && detail.section.current >= 0
-                    && this.sectionFractions.length > detail.section.current + 1
-                ) {
-                    const start = this.sectionFractions[detail.section.current];
-                    const end = this.sectionFractions[detail.section.current + 1];
-                    if (isFinite(start) && isFinite(end)) {
-                        fraction = Math.max(0, Math.min(1, (start + end) / 2));
+            let pageInfo: DocLocation['pageInfo'] | undefined;
+            if (isPaginator && isSingleSection) {
+                const totalPages = Math.max(1, renderer.pages > 2 ? renderer.pages - 2 : renderer.pages);
+                const currentPage = isAtEnd ? totalPages : Math.max(1, Math.min(totalPages, renderer.page ?? 1));
+                pageInfo = {
+                    currentPage,
+                    endPage: currentPage,
+                    totalPages,
+                    range: `${currentPage}`,
+                    isEstimated: false,
+                };
+            } else if (detail.location) {
+                const totalLoc = detail.location.total;
+                const currentLoc = isAtEnd ? totalLoc : Math.min(totalLoc, detail.location.current + 1);
+                pageInfo = {
+                    currentPage: currentLoc,
+                    endPage: isAtEnd ? totalLoc : Math.min(totalLoc, detail.location.next + 1),
+                    totalPages: totalLoc,
+                    range: `${currentLoc}`,
+                    isEstimated: true,
+                };
+            }
+
+            let fraction: number;
+            if (isAtEnd) {
+                fraction = 1.0;
+            } else if (isPaginator && pageInfo && pageInfo.totalPages > 0 && isSingleSection) {
+                fraction = Math.max(0, Math.min(1, pageInfo.currentPage / pageInfo.totalPages));
+            } else {
+                const rawFraction = detail.fraction;
+                fraction = typeof rawFraction === 'number' && isFinite(rawFraction)
+                    ? Math.max(0, Math.min(1, rawFraction))
+                    : NaN;
+                if (!isFinite(fraction)) {
+                    if (pageInfo && pageInfo.totalPages > 1) {
+                        fraction = Math.max(
+                            0,
+                            Math.min(1, (pageInfo.currentPage - 1) / (pageInfo.totalPages - 1)),
+                        );
+                    } else if (
+                        typeof detail.section?.current === 'number'
+                        && detail.section.current >= 0
+                        && this.sectionFractions.length > detail.section.current + 1
+                    ) {
+                        const start = this.sectionFractions[detail.section.current];
+                        const end = this.sectionFractions[detail.section.current + 1];
+                        if (isFinite(start) && isFinite(end)) {
+                            fraction = Math.max(0, Math.min(1, (start + end) / 2));
+                        }
                     }
                 }
             }

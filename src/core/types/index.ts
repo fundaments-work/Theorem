@@ -367,6 +367,7 @@ export interface RssArticle {
     fetchedAt: Date;
     isRead: boolean;
     isFavorite: boolean;
+    progress?: number;
 }
 
 export type AppRoute = "library" | "reader" | "vocabulary" | "settings" | "annotations" | "statistics" | "shelves" | "bookmarks" | "feeds" | "opds";

@@ -11,9 +11,9 @@ function escapeXml(unsafe: string): string {
         .replace(/'/g, "&apos;");
 }
 
-function htmlToValidXhtmlBody(htmlContent: string): string {
+function htmlToValidXhtmlBody(htmlContent: string, coverImageUrl?: string): { xhtml: string; hasCoverInBody: boolean } {
     if (typeof DOMParser === "undefined") {
-        return `<div>${escapeXml(htmlContent)}</div>`;
+        return { xhtml: `<div>${escapeXml(htmlContent)}</div>`, hasCoverInBody: false };
     }
 
     try {
@@ -23,21 +23,49 @@ function htmlToValidXhtmlBody(htmlContent: string): string {
         // Remove scripts, styles, iframes
         doc.querySelectorAll("script, style, iframe, object, embed, form").forEach(el => el.remove());
 
+        let hasCoverInBody = false;
+        const normalizedCover = coverImageUrl?.trim().toLowerCase();
+
+        const images = Array.from(doc.querySelectorAll<HTMLImageElement>("img[src]"));
+        const seenSrcs = new Set<string>();
+
+        for (const img of images) {
+            const src = img.getAttribute("src")?.trim();
+            if (!src) continue;
+            const normSrc = src.toLowerCase();
+
+            // Check if this matches coverImageUrl
+            if (normalizedCover && (normSrc === normalizedCover || normalizedCover.endsWith(normSrc) || normSrc.endsWith(normalizedCover))) {
+                hasCoverInBody = true;
+            }
+
+            // Remove duplicate identical images in body
+            if (seenSrcs.has(normSrc)) {
+                img.remove();
+            } else {
+                seenSrcs.add(normSrc);
+            }
+        }
+
         const serializer = new XMLSerializer();
         let serialized = "";
         for (const child of Array.from(doc.body.childNodes)) {
             serialized += serializer.serializeToString(child);
         }
-        return serialized || `<div>${escapeXml(htmlContent)}</div>`;
+        return {
+            xhtml: serialized || `<div>${escapeXml(htmlContent)}</div>`,
+            hasCoverInBody,
+        };
     } catch {
-        return `<div>${escapeXml(htmlContent)}</div>`;
+        return { xhtml: `<div>${escapeXml(htmlContent)}</div>`, hasCoverInBody: false };
     }
 }
 
 export function convertArticleToEpubBlob(article: RssArticle, feedTitle?: string): Blob {
     const rawContent = article.fullContent || article.content || article.summary || "";
     const sanitizedHtml = sanitizeArticleHtml(rawContent);
-    const xhtmlBody = htmlToValidXhtmlBody(sanitizedHtml);
+    const { xhtml: xhtmlBody, hasCoverInBody } = htmlToValidXhtmlBody(sanitizedHtml, article.imageUrl);
+    const shouldRenderCover = !!article.imageUrl && !hasCoverInBody;
 
     const title = article.title || "Untitled Article";
     const author = article.author || feedTitle || "RSS Feed";
@@ -166,7 +194,7 @@ pre {
     <div class="article-meta">
       ${escapedFeedTitle}${escapedFeedTitle && escapedAuthor ? " · " : ""}${escapedAuthor}
     </div>
-    ${article.imageUrl ? `<p><img src="${escapeXml(article.imageUrl)}" alt=""/></p>` : ""}
+    ${shouldRenderCover ? `<p><img src="${escapeXml(article.imageUrl!)}" alt=""/></p>` : ""}
     <div class="article-content">
       ${xhtmlBody}
     </div>
