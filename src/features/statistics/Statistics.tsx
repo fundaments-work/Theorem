@@ -2,7 +2,7 @@
 import { useState, useMemo, memo } from "react";
 import { cn, normalizeAuthor, formatReadingTime } from "../../core/lib/utils";
 import { HIGHLIGHT_SOLID_COLORS } from "../../core/lib/design-tokens";
-import { PageHeader } from "../../ui";
+import { PageHeader, TheoremBookCover } from "../../ui";
 import { useLibraryStore, useSettingsStore, useUIStore } from "../../core/store";
 import { countBooksReadThisYear, isBookCompleted } from "../../core/lib/statistics";
 import type { DailyReadingActivity } from "../../core/types";
@@ -104,17 +104,13 @@ const RecentBookCard = memo(function RecentBookCard({ book, onClick }: RecentBoo
             onClick={onClick}
             className="flex items-center gap-3 sm:gap-4 p-3 border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-muted)] transition-colors text-left w-full min-w-0"
         >
-            {book.coverPath ? (
-                <img
-                    src={book.coverPath}
-                    alt={book.title}
-                    className="w-10 h-14 sm:w-12 sm:h-16 object-cover shadow-sm shrink-0"
+            <div className="w-10 h-14 sm:w-12 sm:h-16 shrink-0 overflow-hidden shadow-sm">
+                <TheoremBookCover
+                    title={book.title}
+                    author={book.author}
+                    coverUrl={book.coverPath}
                 />
-            ) : (
-                <div className="w-10 h-14 sm:w-12 sm:h-16 bg-[var(--color-surface-muted)] flex items-center justify-center shrink-0">
-                    <BookOpen className="w-5 h-5 text-[color:var(--color-text-muted)]" />
-                </div>
-            )}
+            </div>
             <div className="flex-1 min-w-0">
                 <h4 className="font-medium text-sm text-[color:var(--color-text-primary)] truncate">
                     {book.title}
@@ -487,17 +483,13 @@ export function StatisticsPage() {
                                         onClick={() => handleBookClick(book.id)}
                                         className="flex items-center gap-3 w-full text-left group min-w-0"
                                     >
-                                        {book.coverPath ? (
-                                            <img
-                                                src={book.coverPath}
-                                                alt={book.title}
-                                                className="w-10 h-14 object-cover shadow-sm shrink-0"
+                                        <div className="w-10 h-14 shrink-0 overflow-hidden shadow-sm">
+                                            <TheoremBookCover
+                                                title={book.title}
+                                                author={book.author}
+                                                coverUrl={book.coverPath}
                                             />
-                                        ) : (
-                                            <div className="w-10 h-14 bg-[var(--color-surface-muted)] flex items-center justify-center shrink-0">
-                                                <BookOpen className="w-4 h-4 text-[color:var(--color-text-muted)]" />
-                                            </div>
-                                        )}
+                                        </div>
                                         <div className="flex-1 min-w-0">
                                             <h4 className="text-sm font-medium text-[color:var(--color-text-primary)] truncate group-hover:text-[color:var(--color-accent)] transition-colors">
                                                 {book.title}

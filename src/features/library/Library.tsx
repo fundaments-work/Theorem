@@ -16,7 +16,7 @@ import {
     Heart, Trash2, BookMarked, Info, LayoutGrid, List, Grid3X3, CheckCheck, RotateCcw,
     ChevronDown, Star, Check, CloudOff, Pencil, Download
 } from "lucide-react";
-import { ContextMenu, PageHeader } from "../../ui";
+import { ContextMenu, PageHeader, TheoremBookCover } from "../../ui";
 import type { ContextMenuItem } from "../../ui";
 import { Modal, ModalHeader, ModalBody, ModalFooter, ConfirmDialog, AlertDialog } from "../../ui";
 import { getFilteredAndSortedBooks } from "./filtering";
@@ -235,19 +235,11 @@ export const BookCard = memo(function BookCard({
                             "transition-colors duration-300 group-hover:shadow-lg group-hover:-translate-y-1 cursor-pointer"
                         )}
                     >
-                        {book.coverPath ? (
-                            <img
-                                src={book.coverPath}
-                                alt={book.title}
-                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                loading="lazy"
-                                decoding="async"
-                            />
-                        ) : (
-                            <div className="book-cover-placeholder w-full h-full text-[10px] p-2 flex items-center justify-center bg-[var(--color-surface-muted)]">
-                                <span className="line-clamp-3 text-center uppercase tracking-tighter opacity-40 font-bold">{book.title}</span>
-                            </div>
-                        )}
+                        <TheoremBookCover
+                            title={book.title}
+                            author={book.author}
+                            coverUrl={book.coverPath}
+                        />
 
                         {isSelecting && (
                             <div className={cn(
@@ -261,7 +253,7 @@ export const BookCard = memo(function BookCard({
                         )}
 
                         {book.progress > 0 && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)] z-10">
                                 <div
                                     className="h-full bg-[var(--color-accent)] transition-colors duration-500"
                                     style={{ width: `${book.progress * 100}%` }}
@@ -271,7 +263,7 @@ export const BookCard = memo(function BookCard({
 
                         <div
                             className={cn(
-                                "absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-colors duration-300 pointer-events-none",
+                                "absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-colors duration-300 pointer-events-none z-10",
                                 book.isFavorite
                                     ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)] scale-100"
                                     : "bg-white/90 text-[color:var(--color-text-secondary)] scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100"
@@ -281,7 +273,7 @@ export const BookCard = memo(function BookCard({
                         </div>
 
                         {book.syncedWithoutFile && (
-                            <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
+                            <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center text-white rounded-sm pointer-events-none z-10" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
                                 <CloudOff className="w-3 h-3" />
                             </div>
                         )}
@@ -321,19 +313,11 @@ export const BookCard = memo(function BookCard({
                         "relative w-12 h-16 flex-shrink-0 bg-[var(--color-surface-muted)] overflow-hidden",
                         "border border-[var(--color-border)]"
                     )}>
-                        {book.coverPath ? (
-                            <img
-                                src={book.coverPath}
-                                alt={book.title}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                decoding="async"
-                            />
-                        ) : (
-                            <div className="book-cover-placeholder w-full h-full text-[0.625rem] leading-tight p-1 flex items-center justify-center">
-                                <span className="line-clamp-2 text-center">{book.title}</span>
-                            </div>
-                        )}
+                        <TheoremBookCover
+                            title={book.title}
+                            author={book.author}
+                            coverUrl={book.coverPath}
+                        />
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -403,22 +387,14 @@ export const BookCard = memo(function BookCard({
                     }
                 }}
             >
-                {book.coverPath ? (
-                    <img
-                        src={book.coverPath}
-                        alt={book.title}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                    />
-                ) : (
-                    <div className="book-cover-placeholder w-full h-full text-[var(--font-size-3xs)] p-2 flex items-center justify-center">
-                        <span className="line-clamp-3 text-center">{book.title}</span>
-                    </div>
-                )}
+                <TheoremBookCover
+                    title={book.title}
+                    author={book.author}
+                    coverUrl={book.coverPath}
+                />
 
                 {book.progress > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)]">
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-overlay-subtle)] z-10">
                         <div
                             className="h-full bg-[var(--color-accent)]"
                             style={{ width: `${book.progress * 100}%` }}
@@ -428,7 +404,7 @@ export const BookCard = memo(function BookCard({
 
                 <div
                     className={cn(
-                        "absolute top-1 right-1 w-5 h-5 flex items-center justify-center transition-colors pointer-events-none",
+                        "absolute top-1 right-1 w-5 h-5 flex items-center justify-center transition-colors pointer-events-none z-10",
                         book.isFavorite
                             ? "bg-[var(--color-accent)] text-[color:var(--color-accent-contrast)]"
                             : "opacity-0"
@@ -438,7 +414,7 @@ export const BookCard = memo(function BookCard({
                 </div>
 
                 {book.syncedWithoutFile && (
-                    <div className="absolute top-1 left-1 w-5 h-5 flex items-center justify-center text-white rounded-sm pointer-events-none" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
+                    <div className="absolute top-1 left-1 w-5 h-5 flex items-center justify-center text-white rounded-sm pointer-events-none z-10" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 90%, transparent)' }} title="Book file not available locally">
                         <CloudOff className="w-2.5 h-2.5" />
                     </div>
                 )}
@@ -547,17 +523,13 @@ export function BookInfoModal({ book, isOpen, onClose, onEdit }: { book: Book | 
             <ModalBody className="p-0">
                 <div className="p-6">
                     <div className="flex items-start gap-4">
-                        {book.coverPath ? (
-                            <img
-                                src={book.coverPath}
-                                alt={book.title}
-                                className="w-24 h-36 object-cover shadow-md"
+                        <div className="w-24 h-36 shrink-0 overflow-hidden shadow-md">
+                            <TheoremBookCover
+                                title={book.title}
+                                author={book.author}
+                                coverUrl={book.coverPath}
                             />
-                        ) : (
-                            <div className="w-24 h-36 bg-[var(--color-surface-muted)] flex items-center justify-center">
-                                <BookOpen className="w-8 h-8 text-[color:var(--color-text-muted)]" />
-                            </div>
-                        )}
+                        </div>
                         <div className="flex-1 min-w-0">
                             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] line-clamp-2">
                                 {book.title}

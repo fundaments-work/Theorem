@@ -6,7 +6,7 @@ import { getShelfColor, getShelfInitials } from "../../core/lib/design-tokens";
 import { rankByFuzzyQuery } from "../../core/lib/search/fuzzy";
 import { useLibraryStore, useUIStore, useSettingsStore } from "../../core/store";
 import { ShelfModal } from "./components/modals/ShelfModal";
-import { ConfirmDialog } from "../../ui";
+import { ConfirmDialog, TheoremBookCover } from "../../ui";
 import { MemoizedBookCard, BookInfoModal, AddToShelfModal, RenameBookModal } from "./Library";
 import { getFilteredAndSortedBooks } from "./filtering";
 import { useDebounce } from "../../core/lib/useDebounce";
@@ -112,23 +112,16 @@ const ShelfCard = memo(function ShelfCard({ shelf, books, actualBookCount, onCli
                             {displayBooks.map((book, i) => (
                                 <div
                                     key={book.id}
-                                    className="relative overflow-hidden shadow-sm"
+                                    className="relative overflow-hidden shadow-sm aspect-[2/3]"
                                     style={{
                                         transform: `translateY(${i % 2 === 1 ? "8px" : "0"})`,
                                     }}
                                 >
-                                    {book.coverPath ? (
-                                        <img
-                                            src={book.coverPath}
-                                            alt={book.title}
-                                            className="w-full h-full object-cover"
-                                            loading="lazy"
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full bg-[var(--color-surface)] flex items-center justify-center">
-                                            <BookOpen className="w-6 h-6 text-[color:var(--color-text-muted)]" />
-                                        </div>
-                                    )}
+                                    <TheoremBookCover
+                                        title={book.title}
+                                        author={book.author}
+                                        coverUrl={book.coverPath}
+                                    />
                                 </div>
                             ))}
                             

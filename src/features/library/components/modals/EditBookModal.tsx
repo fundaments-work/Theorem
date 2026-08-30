@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, ModalHeader, ModalBody, ModalFooter } from "../../../../ui";
+import { Modal, ModalHeader, ModalBody, ModalFooter, TheoremBookCover } from "../../../../ui";
 import { applyBookEdits } from "../../../../core/lib/book-edit";
 import { cn } from "../../../../core/lib/utils";
-import { Star, Upload, Link as LinkIcon, Trash2, AlertCircle, Loader2, BookOpen } from "lucide-react";
+import { Star, Upload, Link as LinkIcon, Trash2, AlertCircle, Loader2 } from "lucide-react";
 import type { Book } from "../../../../core/types";
 
 interface EditBookModalProps {
@@ -155,16 +155,12 @@ export function EditBookModal({ isOpen, book, onClose }: EditBookModalProps) {
                     )}
 
                     <div className="flex items-start gap-4 mb-5">
-                        <div className="w-20 h-28 shrink-0 bg-[var(--color-surface-muted)] flex items-center justify-center overflow-hidden">
-                            {coverPreview ? (
-                                <img
-                                    src={coverPreview}
-                                    alt="Cover preview"
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <BookOpen className="w-8 h-8 text-[color:var(--color-text-muted)]" />
-                            )}
+                        <div className="w-20 h-28 shrink-0 overflow-hidden shadow-sm">
+                            <TheoremBookCover
+                                title={title || book?.title || "Untitled"}
+                                author={author || book?.author || "Unknown Author"}
+                                coverUrl={coverPreview}
+                            />
                         </div>
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-2">
